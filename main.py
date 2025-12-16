@@ -26,6 +26,8 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from decimal import Decimal
 from datetime import date
 from enum import Enum
+from models import *
+from helpers import *
 
 # --- Initialize FastAPI App ---
 app = FastAPI(
@@ -33,90 +35,6 @@ app = FastAPI(
     description="An API for accountants to manage their clients' financial data.",
     version="1.0.0",
 )
-
-
-# --- Pydantic Models (Data Schemas) ---
-
-class CompanyUser(BaseModel):
-    name: str; email: EmailStr; is_admin: bool = Field(..., alias='isAdmin')
-    class Config: validate_by_name = True
-
-class CompanyInfo(BaseModel):
-    company_name: str = Field(..., alias='companyName')
-    industry: str; email: EmailStr; phone: str; address: str
-    fiscal_year_end: str = Field(..., alias='fiscalYearEnd')
-    class Config: validate_by_name = True
-
-class ClientCreate(BaseModel):
-    company_info: CompanyInfo = Field(..., alias='companyInfo')
-    users: List[CompanyUser]
-    @validator('users')
-    def validate_users(cls, v):
-        if not v: raise ValueError('A client must have at least one user.')
-        if not any(u.is_admin for u in v): raise ValueError('A client must have at least one admin user.')
-        return v
-    class Config: validate_by_name = True
-
-class ClientResponse(BaseModel):
-    client_id: int
-    company_info: CompanyInfo
-    users: List[CompanyUser]
-
-class AccountType(BaseModel):
-    name: str = Field(..., description="The unique name of the account type.")
-
-class AccountCurrency(BaseModel):
-    code: str = Field(..., description="The unique three-letter currency code (e.g., BRL).")
-    name: str = Field(..., description="The full name of the currency.")
-
-class FinancialAccountBase(BaseModel):
-    name: str; institution: str
-    account_type: str = Field(..., alias="accountType")
-    account_currency: str = Field(..., alias="accountCurrency")
-    class Config: validate_by_name = True
-
-class FinancialAccountCreate(FinancialAccountBase):
-    balance: Decimal
-
-class FinancialAccountResponse(FinancialAccountBase):
-    account_id: int; balance: Decimal
-
-class CategoryType(str, Enum):
-    EXPENSE = "expense"
-    INCOME = "income"
-
-class Category(BaseModel):
-    id: int; name: str; description: Optional[str] = None
-    type: CategoryType
-
-class Status(BaseModel):
-    id: int; name: str; description: Optional[str] = None
-
-class Partner(BaseModel):
-    id: int; name: str; contact_info: Optional[str] = None
-
-class CostCenter(BaseModel):
-    id: int; name: str; description: Optional[str] = None
-
-class Invoice(BaseModel):
-    id: int; invoice_number: str; issue_date: date; due_date: date; amount: Decimal
-
-class TransactionBase(BaseModel):
-    transaction_date: date = Field(..., alias="date")
-    description: str; amount: Decimal
-    category_id: int = Field(..., alias="categoryId")
-    financial_account_id: int = Field(..., alias="financialAccountId")
-    status_id: int = Field(..., alias="statusId")
-    partner_id: Optional[int] = Field(None, alias="partnerId")
-    cost_center_id: Optional[int] = Field(None, alias="costCenterId")
-    invoice_id: Optional[int] = Field(None, alias="invoiceId")
-    class Config: validate_by_name = True
-
-class TransactionCreate(TransactionBase):
-    pass
-
-class TransactionResponse(TransactionBase):
-    id: int
 
 # --- In-Memory Database ---
 db_clients: List[ClientResponse] = []
@@ -151,57 +69,6 @@ invoice_id_counter = 1
 
 db_transactions: Dict[int, List[TransactionResponse]] = {}
 transaction_id_counter = 1
-
-# --- Generic Helper Functions ---
-def find_item_by_id(item_id: int, db_list: list, item_name: str):
-    for item in db_list:
-        if item.id == item_id:
-            return item
-    raise HTTPException(status_code=404, detail=f"{item_name} with ID {item_id} not found")
-
-# --- Specific Helper Functions ---
-def find_user_by_email(client: ClientResponse, email: EmailStr):
-    for i, user in enumerate(client.users):
-        if user.email == email: return i, user
-    return None
-
-def find_account_type_or_404(name: str):
-    for acc_type in db_account_types:
-        if acc_type.name.lower() == name.lower(): return acc_type
-    raise HTTPException(status_code=404, detail=f"Account type '{name}' not found.")
-
-def find_currency_or_404(code: str):
-    for currency in db_account_currencies:
-        if currency.code.lower() == code.lower(): return currency
-    raise HTTPException(status_code=404, detail=f"Currency code '{code}' not found.")
-
-def find_client_or_404(client_id: int):
-    for client in db_clients:
-        if client.client_id == client_id: return client
-    raise HTTPException(status_code=404, detail=f"Client with ID {client_id} not found")
-
-def find_financial_account_or_404(client_id: int, account_id: int):
-    if client_id not in db_financial_accounts:
-        raise HTTPException(status_code=404, detail=f"No accounts found for client {client_id}")
-    for account in db_financial_accounts[client_id]:
-        if account.account_id == account_id: return account
-    raise HTTPException(status_code=404, detail=f"Account with ID {account_id} not found for client {client_id}")
-
-def find_transaction_or_404(client_id: int, transaction_id: int):
-    if client_id not in db_transactions:
-        raise HTTPException(status_code=404, detail=f"No transactions found for client {client_id}")
-    for tx in db_transactions[client_id]:
-        if tx.id == transaction_id: return tx
-    raise HTTPException(status_code=404, detail=f"Transaction with ID {transaction_id} not found for client {client_id}")
-
-def update_account_balance(account: FinancialAccountResponse, category: Category, amount: Decimal, operation: str):
-    """Updates account balance. 'add' for new, 'subtract' for deletion/old value."""
-    multiplier = -1 if category.type == CategoryType.EXPENSE else 1
-    if operation == 'subtract':
-        account.balance -= (amount * multiplier)
-    else: # add
-        account.balance += (amount * multiplier)
-
 
 # --- API Endpoints ---
 @app.get("/")
