@@ -28,6 +28,12 @@ from datetime import date
 from enum import Enum
 from models import *
 from helpers import *
+import pymysql.cursors
+from pymysql.connections import Connection
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Initialize FastAPI App ---
 app = FastAPI(
@@ -35,6 +41,21 @@ app = FastAPI(
     description="An API for accountants to manage their clients' financial data.",
     version="1.0.0",
 )
+
+# --- Database Connection ---
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_DATABASE = os.getenv("DB_DATABASE")
+
+connection: Connection = pymysql.connect(host=DB_HOST,
+                             user=DB_USER,
+                             password=DB_PASSWORD,
+                             database=DB_DATABASE,
+                             charset='utf8mb4',
+                             cursorclass=pymysql.cursors.DictCursor)
+
+
 
 # --- In-Memory Database ---
 db_clients: List[ClientResponse] = []
