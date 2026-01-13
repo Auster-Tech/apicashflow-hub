@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, status, Path
-from typing import List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Tuple, Dict
 from pydantic import BaseModel, EmailStr, Field, validator
 from decimal import Decimal
 from datetime import date
@@ -74,3 +74,87 @@ def create_client(connection: Connection):
             cursor.execute(sql, ('webmaster@python.org',))
             result = cursor.fetchone()
             print(result)
+
+class Client:
+    table = 'Client'
+    
+    @staticmethod
+    def find_all(connection: Connection):
+        client_list: List[ClientResponse] = []
+
+        with connection.cursor() as cursor:
+            sql = F"SELECT * FROM `{Client.table}`"
+            cursor.execute(sql)
+            result = cursor.fetchall()
+            
+            if not result:
+                raise Exception("No result found.")
+            
+            for client in result:
+                client_list.append(ClientResponse.model_validate(client))
+
+        return client_list
+
+
+    @staticmethod
+    def find_first_by_field(connection: Connection, field_name:str, field_value:Any):
+        response: ClientResponse
+        with connection.cursor() as cursor:
+            sql = F"SELECT * FROM `{Client.table}` WHERE `{field_name}`=%s"
+            cursor.execute(sql, (field_value,))
+            result = cursor.fetchone()
+            
+            if not result:
+                raise Exception("No result found.")
+            
+            response = ClientResponse.model_validate(result)
+
+        return response
+    
+    @staticmethod
+    def create(connection: Connection, client_data: ClientCreate):
+        client = client_data.model_dump()
+        columns = client.keys()
+        col_list_str = "`,`".join(columns)
+        values_list = [f"%({column})s" for column in columns]
+        values_list_str = ", ".join(values_list)   
+        response: ClientResponse         
+        
+        with connection.cursor() as cursor:
+            sql = f"INSERT INTO `{Client.table}` (`{col_list_str}`) VALUES ({values_list_str})"
+            cursor.execute(sql, client)
+
+        connection.commit()
+
+        response = Client.find_first_by_field(connection, "tax_id", client["tax_id"])
+
+        return response
+
+    @staticmethod
+    def update(connection: Connection, id:int, client_data: ClientCreate):
+        client = client_data.model_dump()
+        client['status'] = client['status'].value
+        set_values = []
+        
+        for column in client.keys():
+            set_values.append(f"{column} = %({column})s")
+        
+        set_clause = ", ".join(set_values)
+        
+        with connection.cursor() as cursor:
+            sql = f"UPDATE `{Client.table}` SET {set_clause} WHERE `id` = {id}"
+            cursor.execute(sql, client)
+
+        connection.commit()
+
+        updated_client: ClientResponse = Client.find_first_by_field(connection, "id", id)
+        return updated_client
+
+    @staticmethod
+    def delete(connection: Connection, id:int):
+        with connection.cursor() as cursor:
+            sql = f"UPDATE `{Client.table}` SET `status` = {Status.DELETED.value} WHERE `id` = {id}"
+            cursor.execute(sql)
+
+        connection.commit()
+        return True

@@ -20,6 +20,7 @@
 #
 # 7. Open your browser and go to http://127.0.0.1:8000/docs to see the interactive API documentation.
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, status, Path
 from typing import List, Optional, Tuple, Dict
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -27,7 +28,7 @@ from decimal import Decimal
 from datetime import date
 from enum import Enum
 from models import *
-from helpers import *
+import helpers
 import pymysql.cursors
 from pymysql.connections import Connection
 import os
@@ -35,27 +36,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Database Connection ---
+    DB_HOST = os.getenv("DB_HOST")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_DATABASE = os.getenv("DB_DATABASE")
+
+    connection: Connection = pymysql.connect(host=DB_HOST,
+                                user=DB_USER,
+                                password=DB_PASSWORD,
+                                database=DB_DATABASE,
+                                charset='utf8mb4',
+                                cursorclass=pymysql.cursors.DictCursor)
+
+    app.state.connection = connection
+
+    yield
+
+    app.state.connection.close()
+
+    return
+
 # --- Initialize FastAPI App ---
 app = FastAPI(
     title="Accounting Control API",
     description="An API for accountants to manage their clients' financial data.",
     version="1.0.0",
+    lifespan=lifespan
 )
-
-# --- Database Connection ---
-DB_HOST = os.getenv("DB_HOST")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_DATABASE = os.getenv("DB_DATABASE")
-
-connection: Connection = pymysql.connect(host=DB_HOST,
-                             user=DB_USER,
-                             password=DB_PASSWORD,
-                             database=DB_DATABASE,
-                             charset='utf8mb4',
-                             cursorclass=pymysql.cursors.DictCursor)
-
-
 
 # --- In-Memory Database ---
 db_clients: List[ClientResponse] = []
@@ -74,10 +84,10 @@ db_categories: List[Category] = [
 ]
 category_id_counter = 3
 
-db_statuses: List[Status] = [
-    Status(id=1, name="Pending", description="Transaction is awaiting confirmation."),
-    Status(id=2, name="Completed", description="Transaction is finalized."),
-    Status(id=3, name="Cancelled", description="Transaction was voided.")
+db_statuses: List[TransactionStatus] = [
+    TransactionStatus(id=1, name="Pending", description="Transaction is awaiting confirmation."),
+    TransactionStatus(id=2, name="Completed", description="Transaction is finalized."),
+    TransactionStatus(id=3, name="Cancelled", description="Transaction was voided.")
 ]
 status_id_counter = 4
 
@@ -98,35 +108,46 @@ def read_root(): return {"message": "Welcome to the Accounting Control API!"}
 # --- Client CRUD Endpoints ---
 @app.post("/clients/", response_model=ClientResponse, status_code=201, tags=["Clients"])
 def create_client(client_data: ClientCreate):
-    global client_id_counter
-    new_client = ClientResponse(client_id=client_id_counter, **client_data.dict())
-    db_clients.append(new_client)
-    db_financial_accounts[client_id_counter] = []
-    db_transactions[client_id_counter] = []
-    client_id_counter += 1
-    return new_client
+    try:    
+        new_client: ClientResponse = helpers.Client.create(app.state.connection, client_data)
+        return new_client
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
 
 @app.get("/clients/", response_model=List[ClientResponse], tags=["Clients"])
-def get_all_clients(): return db_clients
+def get_all_clients():
+    try:    
+        client_list: List[ClientResponse] = helpers.Client.find_all(app.state.connection)
+        return client_list
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
 
 @app.get("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
-def get_client_by_id(client_id: int): return find_client_or_404(client_id)
-
+def get_client_by_id(client_id: int):
+    try:    
+        client: ClientResponse = helpers.Client.find_first_by_field(app.state.connection, 
+                                                                         "id", 
+                                                                         client_id)
+        return client
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
+    
 @app.put("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
 def update_client(client_id: int, client_data: ClientCreate):
-    client = find_client_or_404(client_id)
-    client_index = db_clients.index(client)
-    updated_client = ClientResponse(client_id=client_id, **client_data.dict())
-    db_clients[client_index] = updated_client
-    return updated_client
+    try:
+        client: ClientResponse = helpers.Client.update(app.state.connection, 
+                                                        client_id, 
+                                                        client_data)
+        return client
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
 
 @app.delete("/clients/{client_id}", status_code=204, tags=["Clients"])
 def delete_client(client_id: int):
-    client = find_client_or_404(client_id)
-    db_clients.remove(client)
-    if client_id in db_financial_accounts:
-        del db_financial_accounts[client_id]
-    return None
+    try:
+        helpers.Client.delete(app.state.connection, client_id)
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
 
 # --- Client User CRUD Endpoints ---
 @app.get("/clients/{client_id}/users/", response_model=List[CompanyUser], tags=["Client Users"])

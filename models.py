@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple, Dict
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, validator
 from decimal import Decimal
 from datetime import date
 from enum import Enum
@@ -7,30 +7,36 @@ from enum import Enum
 
 # --- Pydantic Models (Data Schemas) ---
 
+class Status(Enum):
+    INACTIVE = 0
+    ACTIVE = 1
+    SUSPENDED = 2
+    DELETED = 99
+
 class CompanyUser(BaseModel):
     name: str; email: EmailStr; is_admin: bool = Field(..., alias='isAdmin')
     class Config: validate_by_name = True
 
-class CompanyInfo(BaseModel):
+class ClientCreate(BaseModel):
+    tax_id: str = Field(..., alias='taxId')
     company_name: str = Field(..., alias='companyName')
     industry: str; email: EmailStr; phone: str; address: str
     fiscal_year_end: str = Field(..., alias='fiscalYearEnd')
-    class Config: validate_by_name = True
-
-class ClientCreate(BaseModel):
-    company_info: CompanyInfo = Field(..., alias='companyInfo')
-    users: List[CompanyUser]
-    @validator('users')
-    def validate_users(cls, v):
-        if not v: raise ValueError('A client must have at least one user.')
-        if not any(u.is_admin for u in v): raise ValueError('A client must have at least one admin user.')
-        return v
+    status: Status
+  
+    # users: List[CompanyUser]
+    # @field_validator('users')
+    # def validate_users(cls, v):
+    #     if not v: raise ValueError('A client must have at least one user.')
+    #     if not any(u.is_admin for u in v): raise ValueError('A client must have at least one admin user.')
+    #     return v
     class Config: validate_by_name = True
 
 class ClientResponse(BaseModel):
-    client_id: int
-    company_info: CompanyInfo
-    users: List[CompanyUser]
+    id: int; tax_id: str; company_name: str
+    industry: str; email: EmailStr; phone: str; address: str
+    fiscal_year_end: str; status: Status
+    # users: List[CompanyUser]
 
 class AccountType(BaseModel):
     name: str = Field(..., description="The unique name of the account type.")
@@ -59,7 +65,7 @@ class Category(BaseModel):
     id: int; name: str; description: Optional[str] = None
     type: CategoryType
 
-class Status(BaseModel):
+class TransactionStatus(BaseModel):
     id: int; name: str; description: Optional[str] = None
 
 class Partner(BaseModel):
@@ -76,7 +82,7 @@ class TransactionBase(BaseModel):
     description: str; amount: Decimal
     category_id: int = Field(..., alias="categoryId")
     financial_account_id: int = Field(..., alias="financialAccountId")
-    status_id: int = Field(..., alias="statusId")
+    transaction_status_id: int = Field(..., alias="transactionStatusId")
     partner_id: Optional[int] = Field(None, alias="partnerId")
     cost_center_id: Optional[int] = Field(None, alias="costCenterId")
     invoice_id: Optional[int] = Field(None, alias="invoiceId")
