@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, status, Path
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Tuple, Dict, TypeVar
 from pydantic import BaseModel, EmailStr, Field, validator
 from decimal import Decimal
 from datetime import date
@@ -16,7 +16,7 @@ def find_item_by_id(item_id: int, db_list: list, item_name: str, connection: Con
 
 # --- Specific Helper Functions ---
 def find_user_by_email(client: ClientResponse, email: EmailStr, connection: Connection):
-    for i, user in enumerate(client.users):
+    for i, user in enumerate(ClientHelper.users):
         if user.email == email: return i, user
     return None
 
@@ -32,7 +32,7 @@ def find_currency_or_404(code: str, connection: Connection):
 
 def find_client_or_404(client_id: int, connection: Connection):
     for client in db_clients:
-        if client.client_id == client_id: return client
+        if ClientHelper.client_id == client_id: return client
     raise HTTPException(status_code=404, detail=f"Client with ID {client_id} not found")
 
 def find_financial_account_or_404(client_id: int, account_id: int, connection: Connection):
@@ -57,104 +57,164 @@ def update_account_balance(account: FinancialAccountResponse, category: Category
     else: # add
         account.balance += (amount * multiplier)
 
-def create_client(connection: Connection):
-    with connection:
-        with connection.cursor() as cursor:
-            # Create a new record
-            sql = "INSERT INTO `ZTest` (`col`) VALUES (%s), (%s), (%s)"
-            cursor.execute(sql, [('webmaster',),('python',),('org',)])
-
-        # connection is not autocommit by default. So you must commit to save
-        # your changes.
-        connection.commit()
-
-        with connection.cursor() as cursor:
-            # Read a single record
-            sql = "SELECT * FROM `ZTest` WHERE `col`=%s"
-            cursor.execute(sql, ('webmaster@python.org',))
+class Query:
+    def __init__(self, table: str, connection: Connection):
+        self.table = table
+        self.connection = connection
+    
+    def find_all(self):
+        with self.connection.cursor() as cursor:
+            sql = F"SELECT * FROM `{ClientHelper.table}`"
+            cursor.execute(sql)
+            result = cursor.fetchall()
+        return result
+    
+    def find_first_by_field(self, field_name:str, field_value:Any):
+        with self.connection.cursor() as cursor:
+            sql = F"SELECT * FROM `{self.table}` WHERE `{field_name}`=%s"
+            cursor.execute(sql, (field_value,))
             result = cursor.fetchone()
-            print(result)
+        return result
+    
+    def create(self, client_data: dict):
+        columns = client_data.keys()
+        col_list_str = "`,`".join(columns)
+        values_list = [f"%({column})s" for column in columns]
+        values_list_str = ", ".join(values_list)
 
-class Client:
+        with self.connection.cursor() as cursor:
+            sql = f"INSERT INTO `{self.table}` (`{col_list_str}`) VALUES ({values_list_str})"
+            cursor.execute(sql, client_data)
+
+        self.connection.commit()
+
+    def update(self, id: int, client_data: dict):
+        set_values = []
+        
+        for column in client_data.keys():
+            set_values.append(f"{column} = %({column})s")
+        
+        set_clause = ", ".join(set_values)
+        
+        with self.connection.cursor() as cursor:
+            sql = f"UPDATE `{self.table}` SET {set_clause} WHERE `id` = {id}"
+            cursor.execute(sql, client_data)
+
+        self.connection.commit()
+
+    def delete(self, id: int):
+        with self.connection.cursor() as cursor:
+            sql = f"UPDATE `{self.table}` SET `status` = {Status.DELETED.value} WHERE `id` = {id}"
+            cursor.execute(sql)
+
+        self.connection.commit()    
+
+class ClientHelper:
     table = 'Client'
     
     @staticmethod
     def find_all(connection: Connection):
         client_list: List[ClientResponse] = []
+        query = Query(ClientHelper.table, connection)
+        result = query.find_all()
+        
+        if not result:
+            raise Exception("No result found.")
+        
+        for client in result:
+            client_list.append(ClientResponse.model_validate(client))
 
-        with connection.cursor() as cursor:
-            sql = F"SELECT * FROM `{Client.table}`"
-            cursor.execute(sql)
-            result = cursor.fetchall()
-            
-            if not result:
-                raise Exception("No result found.")
-            
-            for client in result:
-                client_list.append(ClientResponse.model_validate(client))
-
-        return client_list
-
+        return client_list 
 
     @staticmethod
     def find_first_by_field(connection: Connection, field_name:str, field_value:Any):
-        response: ClientResponse
-        with connection.cursor() as cursor:
-            sql = F"SELECT * FROM `{Client.table}` WHERE `{field_name}`=%s"
-            cursor.execute(sql, (field_value,))
-            result = cursor.fetchone()
-            
-            if not result:
-                raise Exception("No result found.")
-            
-            response = ClientResponse.model_validate(result)
+        query = Query(ClientHelper.table, connection)
+        result = query.find_first_by_field(field_name, field_value)
+        
+        if not result:
+            raise Exception("No result found.")
+        
+        response: ClientResponse = ClientResponse.model_validate(result)
 
         return response
     
     @staticmethod
     def create(connection: Connection, client_data: ClientCreate):
         client = client_data.model_dump()
-        columns = client.keys()
-        col_list_str = "`,`".join(columns)
-        values_list = [f"%({column})s" for column in columns]
-        values_list_str = ", ".join(values_list)   
-        response: ClientResponse         
-        
-        with connection.cursor() as cursor:
-            sql = f"INSERT INTO `{Client.table}` (`{col_list_str}`) VALUES ({values_list_str})"
-            cursor.execute(sql, client)
-
-        connection.commit()
-
-        response = Client.find_first_by_field(connection, "tax_id", client["tax_id"])
+        client['status'] = client['status'].value
+        query = Query(ClientHelper.table, connection)
+        query.create(client)
+        response: ClientResponse  = ClientHelper.find_first_by_field(connection, "tax_id", client["tax_id"])
 
         return response
-
+    
     @staticmethod
     def update(connection: Connection, id:int, client_data: ClientCreate):
         client = client_data.model_dump()
         client['status'] = client['status'].value
-        set_values = []
-        
-        for column in client.keys():
-            set_values.append(f"{column} = %({column})s")
-        
-        set_clause = ", ".join(set_values)
-        
-        with connection.cursor() as cursor:
-            sql = f"UPDATE `{Client.table}` SET {set_clause} WHERE `id` = {id}"
-            cursor.execute(sql, client)
+        query = Query(ClientHelper.table, connection)
+        query.update(id, client)
 
-        connection.commit()
-
-        updated_client: ClientResponse = Client.find_first_by_field(connection, "id", id)
+        updated_client: ClientResponse = ClientHelper.find_first_by_field(connection, "id", id)
         return updated_client
 
     @staticmethod
     def delete(connection: Connection, id:int):
-        with connection.cursor() as cursor:
-            sql = f"UPDATE `{Client.table}` SET `status` = {Status.DELETED.value} WHERE `id` = {id}"
-            cursor.execute(sql)
+        query = Query(ClientHelper.table, connection)
+        query.delete(id)
+        return True
+    
+class CompanyUserHelper:
+    table = 'ClientUsers'
+    
+    @staticmethod
+    def find_all(connection: Connection):
+        client_list: List[CompanyUser] = []
+        query = Query(CompanyUserHelper.table, connection)
+        result = query.find_all()
+        
+        if not result:
+            raise Exception("No result found.")
+        
+        for client in result:
+            client_list.append(CompanyUser.model_validate(client))
 
-        connection.commit()
+        return client_list 
+
+    @staticmethod
+    def find_first_by_field(connection: Connection, field_name:str, field_value:Any):
+        query = Query(CompanyUserHelper.table, connection)
+        result = query.find_first_by_field(field_name, field_value)
+        
+        if not result:
+            raise Exception("No result found.")
+        
+        response: CompanyUser = CompanyUser.model_validate(result)
+
+        return response
+    
+    @staticmethod
+    def create(connection: Connection, client_data: CompanyUser):
+        client = client_data.model_dump()
+        client['status'] = client['status'].value
+        query = Query(CompanyUserHelper.table, connection)
+        query.create(client)
+        response: CompanyUser  = CompanyUserHelper.find_first_by_field(connection, "email", client["email"])
+
+        return response
+    
+    @staticmethod
+    def update(connection: Connection, id:int, client_data: CompanyUser):
+        client = client_data.model_dump()
+        client['status'] = client['status'].value
+        query = Query(CompanyUserHelper.table, connection)
+        query.update(id, client)
+
+        updated_client: CompanyUser = CompanyUserHelper.find_first_by_field(connection, "id", id)
+        return updated_client
+
+    @staticmethod
+    def delete(connection: Connection, id:int):
+        query = Query(CompanyUserHelper.table, connection)
+        query.delete(id)
         return True

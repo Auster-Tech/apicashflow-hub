@@ -109,7 +109,7 @@ def read_root(): return {"message": "Welcome to the Accounting Control API!"}
 @app.post("/clients/", response_model=ClientResponse, status_code=201, tags=["Clients"])
 def create_client(client_data: ClientCreate):
     try:    
-        new_client: ClientResponse = helpers.Client.create(app.state.connection, client_data)
+        new_client: ClientResponse = helpers.ClientHelper.create(app.state.connection, client_data)
         return new_client
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
@@ -117,7 +117,7 @@ def create_client(client_data: ClientCreate):
 @app.get("/clients/", response_model=List[ClientResponse], tags=["Clients"])
 def get_all_clients():
     try:    
-        client_list: List[ClientResponse] = helpers.Client.find_all(app.state.connection)
+        client_list: List[ClientResponse] = helpers.ClientHelper.find_all(app.state.connection)
         return client_list
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
@@ -125,7 +125,7 @@ def get_all_clients():
 @app.get("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
 def get_client_by_id(client_id: int):
     try:    
-        client: ClientResponse = helpers.Client.find_first_by_field(app.state.connection, 
+        client: ClientResponse = helpers.ClientHelper.find_first_by_field(app.state.connection, 
                                                                          "id", 
                                                                          client_id)
         return client
@@ -135,7 +135,7 @@ def get_client_by_id(client_id: int):
 @app.put("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
 def update_client(client_id: int, client_data: ClientCreate):
     try:
-        client: ClientResponse = helpers.Client.update(app.state.connection, 
+        client: ClientResponse = helpers.ClientHelper.update(app.state.connection, 
                                                         client_id, 
                                                         client_data)
         return client
@@ -145,7 +145,7 @@ def update_client(client_id: int, client_data: ClientCreate):
 @app.delete("/clients/{client_id}", status_code=204, tags=["Clients"])
 def delete_client(client_id: int):
     try:
-        helpers.Client.delete(app.state.connection, client_id)
+        helpers.ClientHelper.delete(app.state.connection, client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 

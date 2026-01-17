@@ -14,7 +14,7 @@ class Status(Enum):
     DELETED = 99
 
 class CompanyUser(BaseModel):
-    name: str; email: EmailStr; is_admin: bool = Field(..., alias='isAdmin')
+    name: str; email: EmailStr; is_admin: bool
     class Config: validate_by_name = True
 
 class ClientCreate(BaseModel):

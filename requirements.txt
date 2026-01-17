@@ -3,3 +3,4 @@
    pydantic[email]
    pymysql
    python-dotenv
+   cryptography
