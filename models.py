@@ -15,6 +15,7 @@ class Status(Enum):
 
 class CompanyUser(BaseModel):
     name: str; email: EmailStr; is_admin: bool
+    status: Status
     class Config: validate_by_name = True
 
 class ClientCreate(BaseModel):
@@ -40,22 +41,25 @@ class ClientResponse(BaseModel):
 
 class AccountType(BaseModel):
     name: str = Field(..., description="The unique name of the account type.")
+    status: Status
 
 class AccountCurrency(BaseModel):
     code: str = Field(..., description="The unique three-letter currency code (e.g., BRL).")
     name: str = Field(..., description="The full name of the currency.")
+    status: Status
 
-class FinancialAccountBase(BaseModel):
+class Account(BaseModel):
     name: str; institution: str
-    account_type: str = Field(..., alias="accountType")
-    account_currency: str = Field(..., alias="accountCurrency")
-    class Config: validate_by_name = True
+    account_type_id: int
+    account_currency_id: int
+    client_id: int
+    status: Status
 
-class FinancialAccountCreate(FinancialAccountBase):
+class AccountBalance(BaseModel):
+    account_id: int
     balance: Decimal
-
-class FinancialAccountResponse(FinancialAccountBase):
-    account_id: int; balance: Decimal
+    status: Status
+    dt_created: str
 
 class CategoryType(str, Enum):
     EXPENSE = "expense"
@@ -63,33 +67,35 @@ class CategoryType(str, Enum):
 
 class Category(BaseModel):
     id: int; name: str; description: Optional[str] = None
-    type: CategoryType
+    type: CategoryType; status: Status
 
 class TransactionStatus(BaseModel):
     id: int; name: str; description: Optional[str] = None
+    status: Status
 
 class Partner(BaseModel):
     id: int; name: str; contact_info: Optional[str] = None
+    status: Status
 
 class CostCenter(BaseModel):
     id: int; name: str; description: Optional[str] = None
+    status: Status
 
 class Invoice(BaseModel):
     id: int; invoice_number: str; issue_date: date; due_date: date; amount: Decimal
+    status: Status
 
-class TransactionBase(BaseModel):
+class Transaction(BaseModel):
     transaction_date: date = Field(..., alias="date")
     description: str; amount: Decimal
     category_id: int = Field(..., alias="categoryId")
-    financial_account_id: int = Field(..., alias="financialAccountId")
+    account_id: int = Field(..., alias="financialAccountId")
     transaction_status_id: int = Field(..., alias="transactionStatusId")
     partner_id: Optional[int] = Field(None, alias="partnerId")
     cost_center_id: Optional[int] = Field(None, alias="costCenterId")
     invoice_id: Optional[int] = Field(None, alias="invoiceId")
+    status: Status
     class Config: validate_by_name = True
 
-class TransactionCreate(TransactionBase):
-    pass
-
-class TransactionResponse(TransactionBase):
+class TransactionResponse(Transaction):
     id: int
