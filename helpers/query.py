@@ -21,15 +21,14 @@ class Query:
             if self._where_flag:
                 sql += f" WHERE " +\
                     " AND ".join([f"{key} = %({key})" for key in self._where.keys()])
-
-            cursor.execute(sql)
+            cursor.execute(sql, self._where)
             if first:
                 result = cursor.fetchone()
             else:
                 result = cursor.fetchall()
         return result
     
-    def create(self, client_data: dict):
+    def create(self):
         if not self._where_flag:
             raise Exception("No data specified to be inserted")
         

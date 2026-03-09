@@ -46,7 +46,7 @@ class ClientHelper:
         client['status'] = client['status'].value
         query = Query(ClientHelper.table, connection, **client)
         query.create()
-        response: ClientResponse  = ClientHelper.find_first_by_field(connection, "tax_id", client["tax_id"])
+        response: ClientResponse = ClientHelper.find_first_by_field(connection, "tax_id", client["tax_id"])
 
         return response
     
