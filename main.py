@@ -73,14 +73,6 @@ app = FastAPI(
 def read_root(): return {"message": "Welcome to the Accounting Control API!"}
 
 # --- Client CRUD Endpoints ---
-@app.post("/clients/", response_model=ClientResponse, status_code=201, tags=["Clients"])
-def create_client(client_data: ClientCreate):
-    try:
-        new_client: ClientResponse = helpers.ClientHelper.create(app.state.connection, client_data)
-        return new_client
-    except Exception as ex:
-        raise HTTPException(500, detail=str(ex))
-
 @app.get("/clients/", response_model=List[ClientResponse], tags=["Clients"])
 def get_all_clients():
     try:
@@ -96,6 +88,14 @@ def get_client_by_id(client_id: int):
                                                                          "id", 
                                                                          client_id)
         return client
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
+    
+@app.post("/clients/", response_model=ClientResponse, status_code=201, tags=["Clients"])
+def create_client(client_data: ClientCreate):
+    try:
+        new_client: ClientResponse = helpers.ClientHelper.create(app.state.connection, client_data)
+        return new_client
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
