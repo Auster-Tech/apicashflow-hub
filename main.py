@@ -106,7 +106,7 @@ def get_client_by_id(client_id: int, conn=Depends(get_db)):
         raise HTTPException(500, detail=str(ex))
     
 @app.post("/clients/", response_model=ClientResponse, status_code=201, tags=["Clients"])
-def create_client(client_data: ClientCreate, conn=Depends(get_db)):
+def create_client(client_data: ClientRequest, conn=Depends(get_db)):
     try:
         new_client: ClientResponse = helpers.ClientHelper.create(conn, client_data)
         return new_client
@@ -114,7 +114,7 @@ def create_client(client_data: ClientCreate, conn=Depends(get_db)):
         raise HTTPException(500, detail=str(ex))
     
 @app.put("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
-def update_client(client_id: int, client_data: ClientCreate, conn=Depends(get_db)):
+def update_client(client_id: int, client_data: ClientRequest, conn=Depends(get_db)):
     try:
         client: ClientResponse = helpers.ClientHelper.update(conn, 
                                                         client_id, 
@@ -152,7 +152,7 @@ def get_client_user_by_id(client_id: int, user_id: int, conn=Depends(get_db)):
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/clients/{client_id}/users/", response_model=CompanyUser, status_code=201, tags=["Client Users"])
-def add_user_to_client(client_id: int, new_user: CompanyUser, conn=Depends(get_db)):
+def add_user_to_client(client_id: int, new_user: CompanyUserRequest, conn=Depends(get_db)):
     try:
         new_user: CompanyUser = helpers.CompanyUserHelper.create(conn, new_user, client_id)
         return new_user
@@ -160,7 +160,7 @@ def add_user_to_client(client_id: int, new_user: CompanyUser, conn=Depends(get_d
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/clients/{client_id}/users/{user_id}", response_model=CompanyUser, tags=["Client Users"])
-def update_client_user(client_id: int, user_id: int, user_update: CompanyUser, conn=Depends(get_db)):
+def update_client_user(client_id: int, user_id: int, user_update: CompanyUserRequest, conn=Depends(get_db)):
     try:
         new_user: CompanyUser = helpers.CompanyUserHelper.update(conn, 
                                                                  user_id, 

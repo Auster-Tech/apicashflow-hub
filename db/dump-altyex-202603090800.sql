@@ -385,11 +385,11 @@ UNLOCK TABLES;
 
 -- ALTERATIONS 
 
-ALTER TABLE altyex.Category modify client_id INT NULL;
-ALTER TABLE altyex.CostCenter modify client_id INT NULL;
-ALTER TABLE altyex.Partner modify client_id INT NULL;
-ALTER TABLE altyex.Invoice modify client_id INT NULL;
-ALTER TABLE altyex.TransactionStatus modify client_id INT NULL;
+ALTER TABLE altyex.Category add column client_id INT NULL;
+ALTER TABLE altyex.CostCenter add column client_id INT NULL;
+ALTER TABLE altyex.Partner add column client_id INT NULL;
+ALTER TABLE altyex.Invoice add column client_id INT NULL;
+ALTER TABLE altyex.TransactionStatus add column client_id INT NULL;
 
 ALTER TABLE altyex.Category ADD CONSTRAINT Category_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
 ALTER TABLE altyex.CostCenter ADD CONSTRAINT CostCenter_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);

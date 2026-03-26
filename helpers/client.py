@@ -35,7 +35,7 @@ class ClientHelper:
         return response
     
     @staticmethod
-    def create(connection: Connection, client_data: ClientCreate):
+    def create(connection: Connection, client_data: ClientRequest):
         client = client_data.model_dump()
         client['status'] = client['status'].value
         query = Query(ClientHelper.table, connection, **client)
@@ -45,7 +45,7 @@ class ClientHelper:
         return response
     
     @staticmethod
-    def update(connection: Connection, id:int, client_data: ClientCreate):
+    def update(connection: Connection, id:int, client_data: ClientRequest):
         client = client_data.model_dump()
         client['status'] = client['status'].value
         client['id'] = id

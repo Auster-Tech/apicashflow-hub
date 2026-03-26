@@ -46,19 +46,19 @@ class CompanyUserHelper:
         return response
         
     @staticmethod
-    def create(connection: Connection, client_data: CompanyUser, client_id: int):
+    def create(connection: Connection, client_data: CompanyUserRequest, client_id: int):
         client = client_data.model_dump()
         client['status'] = client['status'].value
         client['client_id'] = client_id
         query = Query(CompanyUserHelper.table, connection, **client)
         query.create()
 
-        response: CompanyUser = CompanyUserHelper.find_first_by_field(connection, "email", client["email"])
+        response: CompanyUser = CompanyUserHelper.find_first_by_field(connection, "email", client["email"], client_id)
         
         return response
     
     @staticmethod
-    def update(connection: Connection, id:int, client_data: CompanyUser, client_id: int):
+    def update(connection: Connection, id:int, client_data: CompanyUserRequest, client_id: int):
         client = client_data.model_dump()
         client['status'] = client['status'].value
         client['id'] = id
