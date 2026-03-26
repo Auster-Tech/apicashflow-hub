@@ -12,8 +12,7 @@ class AccountBalanceHelper:
         query = Query(AccountBalanceHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for account in result:
             account_list.append(AccountBalance.model_validate(account))
@@ -26,8 +25,7 @@ class AccountBalanceHelper:
         query = Query(AccountBalanceHelper.table, connection, status = Status.ACTIVE.value, account_id = account_id)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for account in result:
             account_list.append(AccountBalance.model_validate(account))
@@ -43,8 +41,7 @@ class AccountBalanceHelper:
         query = Query(AccountBalanceHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: AccountBalance = AccountBalance.model_validate(result)
 

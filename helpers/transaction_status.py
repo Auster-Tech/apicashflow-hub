@@ -17,8 +17,7 @@ class TransactionStatusHelper:
         query = Query(TransactionStatusHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for transaction_status in result:
             transaction_status_list.append(TransactionStatus.model_validate(transaction_status))
@@ -32,8 +31,7 @@ class TransactionStatusHelper:
         query = Query(TransactionStatusHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: TransactionStatus = TransactionStatus.model_validate(result)
 

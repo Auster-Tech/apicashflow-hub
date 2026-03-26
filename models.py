@@ -14,6 +14,7 @@ class Status(Enum):
     DELETED = 99
 
 class CompanyUser(BaseModel):
+    id: Optional[int]
     name: str; email: EmailStr; is_admin: bool
     status: Status
     class Config: validate_by_name = True
@@ -24,31 +25,24 @@ class ClientCreate(BaseModel):
     industry: str; email: EmailStr; phone: str; address: str
     fiscal_year_end: str = Field(..., alias='fiscalYearEnd')
     status: Status
-  
-    # users: List[CompanyUser]
-    # @field_validator('users')
-    # def validate_users(cls, v):
-    #     if not v: raise ValueError('A client must have at least one user.')
-    #     if not any(u.is_admin for u in v): raise ValueError('A client must have at least one admin user.')
-    #     return v
     class Config: validate_by_name = True
 
-class ClientResponse(BaseModel):
-    id: int; tax_id: str; company_name: str
-    industry: str; email: EmailStr; phone: str; address: str
-    fiscal_year_end: str; status: Status
-    # users: List[CompanyUser]
+class ClientResponse(ClientCreate):
+    id: int
 
 class AccountType(BaseModel):
+    id: Optional[int]
     name: str = Field(..., description="The unique name of the account type.")
     status: Status
 
 class AccountCurrency(BaseModel):
+    id: Optional[int]
     code: str = Field(..., description="The unique three-letter currency code (e.g., BRL).")
     name: str = Field(..., description="The full name of the currency.")
     status: Status
 
 class Account(BaseModel):
+    id: Optional[int]
     name: str; institution: str
     account_type_id: int
     account_currency_id: int
@@ -56,6 +50,7 @@ class Account(BaseModel):
     status: Status
 
 class AccountBalance(BaseModel):
+    id: Optional[int]
     account_id: int
     balance: Decimal
     status: Status
@@ -65,24 +60,27 @@ class CategoryType(str, Enum):
     EXPENSE = "expense"
     INCOME = "income"
 
-class Category(BaseModel):
-    id: int; name: str; description: Optional[str] = None
+class CategoryRequest(BaseModel):
+    name: str; description: Optional[str] = None
     type: CategoryType; status: Status
 
+class CategoryResponse(CategoryRequest):
+    id: Optional[int]
+
 class TransactionStatus(BaseModel):
-    id: int; name: str; description: Optional[str] = None
+    id: Optional[int]; name: str; description: Optional[str] = None
     status: Status
 
 class Partner(BaseModel):
-    id: int; name: str; contact_info: Optional[str] = None
+    id: Optional[int]; name: str; contact_info: Optional[str] = None
     status: Status
 
 class CostCenter(BaseModel):
-    id: int; name: str; description: Optional[str] = None
+    id: Optional[int]; name: str; description: Optional[str] = None
     status: Status
 
 class Invoice(BaseModel):
-    id: int; invoice_number: str; issue_date: date; due_date: date; amount: Decimal
+    id: Optional[int]; invoice_number: str; issue_date: date; due_date: date; amount: Decimal
     status: Status
 
 class Transaction(BaseModel):

@@ -17,8 +17,7 @@ class CostCenterHelper:
         query = Query(CostCenterHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for cost_center in result:
             cost_center_list.append(CostCenter.model_validate(cost_center))
@@ -32,8 +31,7 @@ class CostCenterHelper:
         query = Query(CostCenterHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: CostCenter = CostCenter.model_validate(result)
 

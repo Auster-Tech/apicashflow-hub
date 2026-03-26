@@ -17,8 +17,7 @@ class PartnerHelper:
         query = Query(PartnerHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for partner in result:
             partner_list.append(Partner.model_validate(partner))
@@ -32,8 +31,7 @@ class PartnerHelper:
         query = Query(PartnerHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: Partner = Partner.model_validate(result)
 

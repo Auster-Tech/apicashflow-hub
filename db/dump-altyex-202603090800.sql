@@ -381,3 +381,18 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-03-09  8:00:18
+
+
+-- ALTERATIONS 
+
+ALTER TABLE altyex.Category modify client_id INT NULL;
+ALTER TABLE altyex.CostCenter modify client_id INT NULL;
+ALTER TABLE altyex.Partner modify client_id INT NULL;
+ALTER TABLE altyex.Invoice modify client_id INT NULL;
+ALTER TABLE altyex.TransactionStatus modify client_id INT NULL;
+
+ALTER TABLE altyex.Category ADD CONSTRAINT Category_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
+ALTER TABLE altyex.CostCenter ADD CONSTRAINT CostCenter_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
+ALTER TABLE altyex.Partner ADD CONSTRAINT Partner_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
+ALTER TABLE altyex.Invoice ADD CONSTRAINT Invoice_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
+ALTER TABLE altyex.TransactionStatus ADD CONSTRAINT TransactionStatus_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);

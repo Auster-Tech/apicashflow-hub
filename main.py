@@ -21,7 +21,9 @@
 # 7. Open your browser and go to http://127.0.0.1:8000/docs to see the interactive API documentation.
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, status, Path
+import logging
+from fastapi import Depends, FastAPI, HTTPException, status, Path
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Tuple, Dict
 from pydantic import BaseModel, EmailStr, Field, validator
 from decimal import Decimal
@@ -33,31 +35,34 @@ import pymysql.cursors
 from pymysql.connections import Connection
 import os
 from dotenv import load_dotenv
+from dbutils.pooled_db import PooledDB
 
 load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Database Connection ---
-    DB_HOST = os.getenv("DB_HOST")
-    DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
-    DB_DATABASE = os.getenv("DB_DATABASE")
-
-    connection: Connection = pymysql.connect(host=DB_HOST,
-                                user=DB_USER,
-                                password=DB_PASSWORD,
-                                database=DB_DATABASE,
-                                charset='utf8mb4',
-                                cursorclass=pymysql.cursors.DictCursor)
-
-    app.state.connection = connection
-
+    app.state.pool = PooledDB(
+            creator=pymysql,
+            maxconnections=10,
+            mincached=2,
+            host=os.getenv("DB_HOST"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            database=os.getenv("DB_DATABASE"),
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
     yield
 
-    app.state.connection.close()
+def get_db():
+    conn = app.state.pool.connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
-    return
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # --- Initialize FastAPI App ---
 app = FastAPI(
@@ -67,6 +72,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080", "https://localhost:8080"],  # origem do seu React
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],      # GET, POST, PUT, DELETE, etc.
+    allow_headers=["Authorization", "Content-Type"],      # Authorization, Content-Type, etc.
+)
 
 # --- API Endpoints ---
 @app.get("/")
@@ -74,17 +86,19 @@ def read_root(): return {"message": "Welcome to the Accounting Control API!"}
 
 # --- Client CRUD Endpoints ---
 @app.get("/clients/", response_model=List[ClientResponse], tags=["Clients"])
-def get_all_clients():
+def get_all_clients(conn=Depends(get_db)):
     try:
-        client_list: List[ClientResponse] = helpers.ClientHelper.find_all(app.state.connection)
+        client_list: List[ClientResponse] = helpers.ClientHelper.find_all(conn)
         return client_list
     except Exception as ex:
+        print(ex)
+        logger.error(f"Error: {ex}")
         raise HTTPException(500, detail=str(ex))
 
 @app.get("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
-def get_client_by_id(client_id: int):
+def get_client_by_id(client_id: int, conn=Depends(get_db)):
     try:
-        client: ClientResponse = helpers.ClientHelper.find_first_by_field(app.state.connection, 
+        client: ClientResponse = helpers.ClientHelper.find_first_by_field(conn, 
                                                                          "id", 
                                                                          client_id)
         return client
@@ -92,17 +106,17 @@ def get_client_by_id(client_id: int):
         raise HTTPException(500, detail=str(ex))
     
 @app.post("/clients/", response_model=ClientResponse, status_code=201, tags=["Clients"])
-def create_client(client_data: ClientCreate):
+def create_client(client_data: ClientCreate, conn=Depends(get_db)):
     try:
-        new_client: ClientResponse = helpers.ClientHelper.create(app.state.connection, client_data)
+        new_client: ClientResponse = helpers.ClientHelper.create(conn, client_data)
         return new_client
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 @app.put("/clients/{client_id}", response_model=ClientResponse, tags=["Clients"])
-def update_client(client_id: int, client_data: ClientCreate):
+def update_client(client_id: int, client_data: ClientCreate, conn=Depends(get_db)):
     try:
-        client: ClientResponse = helpers.ClientHelper.update(app.state.connection, 
+        client: ClientResponse = helpers.ClientHelper.update(conn, 
                                                         client_id, 
                                                         client_data)
         return client
@@ -110,43 +124,45 @@ def update_client(client_id: int, client_data: ClientCreate):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/clients/{client_id}", status_code=204, tags=["Clients"])
-def delete_client(client_id: int):
+def delete_client(client_id: int, conn=Depends(get_db)):
     try:
-        helpers.ClientHelper.delete(app.state.connection, client_id)
+        helpers.ClientHelper.delete(conn, client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 # --- Client User CRUD Endpoints ---
 @app.get("/clients/{client_id}/users/", response_model=List[CompanyUser], tags=["Client Users"])
-def get_client_users(client_id: int):
+def get_client_users(client_id: int, conn=Depends(get_db)):
     try:
-        users_list: List[CompanyUser] = helpers.CompanyUserHelper.find_all(app.state.connection, client_id)
+        users_list: List[CompanyUser] = helpers.CompanyUserHelper.find_all(conn, client_id)
         return users_list
     except Exception as ex:
+        logger.error(ex)
         raise HTTPException(500, detail=str(ex))
     
 @app.get("/clients/{client_id}/users/{user_id}", response_model=List[CompanyUser], tags=["Client Users"])
-def get_client_user_by_id(client_id: int, user_id: int):
+def get_client_user_by_id(client_id: int, user_id: int, conn=Depends(get_db)):
     try:
-        user: CompanyUser = helpers.CompanyUserHelper.find_first_by_field(app.state.connection, 
+        user: CompanyUser = helpers.CompanyUserHelper.find_first_by_field(conn, 
                                                                          user_id, 
                                                                          client_id)
         return user
     except Exception as ex:
+
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/clients/{client_id}/users/", response_model=CompanyUser, status_code=201, tags=["Client Users"])
-def add_user_to_client(client_id: int, new_user: CompanyUser):
+def add_user_to_client(client_id: int, new_user: CompanyUser, conn=Depends(get_db)):
     try:
-        new_user: CompanyUser = helpers.CompanyUserHelper.create(app.state.connection, new_user, client_id)
+        new_user: CompanyUser = helpers.CompanyUserHelper.create(conn, new_user, client_id)
         return new_user
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/clients/{client_id}/users/{user_id}", response_model=CompanyUser, tags=["Client Users"])
-def update_client_user(client_id: int, user_id: int, user_update: CompanyUser):
+def update_client_user(client_id: int, user_id: int, user_update: CompanyUser, conn=Depends(get_db)):
     try:
-        new_user: CompanyUser = helpers.CompanyUserHelper.update(app.state.connection, 
+        new_user: CompanyUser = helpers.CompanyUserHelper.update(conn, 
                                                                  user_id, 
                                                                  user_update, 
                                                                  client_id)
@@ -155,33 +171,33 @@ def update_client_user(client_id: int, user_id: int, user_update: CompanyUser):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/clients/{client_id}/users/{user_id}", status_code=204, tags=["Client Users"])
-def delete_client_user(client_id: int, user_id: int):
+def delete_client_user(client_id: int, user_id: int, conn=Depends(get_db)):
     try:
-        helpers.CompanyUserHelper.delete(app.state.connection, user_id, client_id)
+        helpers.CompanyUserHelper.delete(conn, user_id, client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 # --- Account Type CRUD Endpoints ---
 @app.get("/account-types/", response_model=List[AccountType], tags=["Account Configuration"])
-def get_account_types():
+def get_account_types(conn=Depends(get_db)):
     try:
-        account: AccountType = helpers.AccountTypeHelper.find_all(app.state.connection)
+        account: AccountType = helpers.AccountTypeHelper.find_all(conn)
         return account
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/account-types/", response_model=AccountType, status_code=201, tags=["Account Configuration"])
-def create_account_type(acc_type: AccountType):
+def create_account_type(acc_type: AccountType, conn=Depends(get_db)):
     try:
-        new_acc: AccountType = helpers.AccountTypeHelper.create(app.state.connection, acc_type)
+        new_acc: AccountType = helpers.AccountTypeHelper.create(conn, acc_type)
         return new_acc
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/account-types/{account_id}", response_model=AccountType, tags=["Account Configuration"])
-def update_account_type(account_id: int, acc_update: AccountType):
+def update_account_type(account_id: int, acc_update: AccountType, conn=Depends(get_db)):
     try:
-        new_acc: AccountType = helpers.AccountTypeHelper.update(app.state.connection, 
+        new_acc: AccountType = helpers.AccountTypeHelper.update(conn, 
                                                                  account_id, 
                                                                  acc_update)
         return new_acc
@@ -189,33 +205,33 @@ def update_account_type(account_id: int, acc_update: AccountType):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/account-types/{account_id}", status_code=204, tags=["Account Configuration"])
-def delete_account_type(account_id: int):
+def delete_account_type(account_id: int, conn=Depends(get_db)):
     try:
-        helpers.AccountTypeHelper.delete(app.state.connection, account_id)
+        helpers.AccountTypeHelper.delete(conn, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 # --- Account Currency CRUD Endpoints ---
 @app.get("/account-currencies/", response_model=List[AccountCurrency], tags=["Account Configuration"])
-def get_account_currencies():
+def get_account_currencies(conn=Depends(get_db)):
     try:
-        account: AccountCurrency = helpers.AccountCurrencyHelper.find_all(app.state.connection)
+        account: AccountCurrency = helpers.AccountCurrencyHelper.find_all(conn)
         return account
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/account-currencies/", response_model=AccountCurrency, status_code=201, tags=["Account Configuration"])
-def create_account_currencies(acc: AccountCurrency):
+def create_account_currencies(acc: AccountCurrency, conn=Depends(get_db)):
     try:
-        new_acc: AccountCurrency = helpers.AccountCurrencyHelper.create(app.state.connection, acc)
+        new_acc: AccountCurrency = helpers.AccountCurrencyHelper.create(conn, acc)
         return new_acc
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/account-currencies/{account_id}", response_model=AccountCurrency, tags=["Account Configuration"])
-def update_account_currencies(account_id: int, acc_update: AccountCurrency):
+def update_account_currencies(account_id: int, acc_update: AccountCurrency, conn=Depends(get_db)):
     try:
-        new_acc: AccountCurrency = helpers.AccountCurrencyHelper.update(app.state.connection, 
+        new_acc: AccountCurrency = helpers.AccountCurrencyHelper.update(conn, 
                                                                  account_id, 
                                                                  acc_update)
         return new_acc
@@ -223,48 +239,48 @@ def update_account_currencies(account_id: int, acc_update: AccountCurrency):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/account-currencies/{account_id}", status_code=204, tags=["Account Configuration"])
-def delete_account_currencies(account_id: int):
+def delete_account_currencies(account_id: int, conn=Depends(get_db)):
     try:
-        helpers.AccountCurrencyHelper.delete(app.state.connection, account_id)
+        helpers.AccountCurrencyHelper.delete(conn, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 # --- Account Balance CRUD Endpoints ---
 @app.get("/account-balance/", response_model=List[AccountBalance], tags=["Account Configuration"])
-def get_every_account_balance():
+def get_every_account_balance(conn=Depends(get_db)):
     try:
-        balance: AccountBalance = helpers.AccountBalanceHelper.find_all(app.state.connection)
+        balance: AccountBalance = helpers.AccountBalanceHelper.find_all(conn)
         return balance
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 @app.get("/account-balance/{account_id}", response_model=List[AccountBalance], tags=["Account Configuration"])
-def get_account_balances_from_account(account_id: int):
+def get_account_balances_from_account(account_id: int, conn=Depends(get_db)):
     try:
-        balance: AccountBalance = helpers.AccountBalanceHelper.find_all_by_account(app.state.connection, account_id)
+        balance: AccountBalance = helpers.AccountBalanceHelper.find_all_by_account(conn, account_id)
         return balance
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 @app.get("/account-balance/{account_id}/{balance_id}", response_model=List[AccountBalance], tags=["Account Configuration"])
-def get_account_balance(account_id: int, balance_id: int):
+def get_account_balance(account_id: int, balance_id: int, conn=Depends(get_db)):
     try:
-        balance: AccountBalance = helpers.AccountBalanceHelper.find_first_by_id(app.state.connection, balance_id=balance_id, account_id=account_id)
+        balance: AccountBalance = helpers.AccountBalanceHelper.find_first_by_id(conn, balance_id=balance_id, account_id=account_id)
         return balance
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/account-balance/{account_id}", status_code=201, tags=["Account Configuration"])
-def create_account_balance(balance: AccountBalance, account_id: int):
+def create_account_balance(balance: AccountBalance, account_id: int, conn=Depends(get_db)):
     try:
-        helpers.AccountBalanceHelper.create(app.state.connection, balance, account_id)
+        helpers.AccountBalanceHelper.create(conn, balance, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/account-balance/{account_id}/{balance_id}", response_model=AccountBalance, tags=["Account Configuration"])
-def update_account_balance(balance_id: int, account_id: int, balance: AccountBalance):
+def update_account_balance(balance_id: int, account_id: int, balance: AccountBalance, conn=Depends(get_db)):
     try:
-        new_balance: AccountBalance = helpers.AccountBalanceHelper.update(app.state.connection, 
+        new_balance: AccountBalance = helpers.AccountBalanceHelper.update(conn, 
                                                                           balance_id,
                                                                           balance,
                                                                           account_id)
@@ -273,43 +289,43 @@ def update_account_balance(balance_id: int, account_id: int, balance: AccountBal
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/account-balance/{account_id}/{balance_id}", status_code=204, tags=["Account Configuration"])
-def delete_account_balance(balance_id: int, account_id: int):
+def delete_account_balance(balance_id: int, account_id: int, conn=Depends(get_db)):
     try:
-        helpers.AccountBalanceHelper.delete(app.state.connection, balance_id, account_id)
+        helpers.AccountBalanceHelper.delete(conn, balance_id, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 # --- Financial Account CRUD Endpoints ---
-@app.post("/clients/{client_id}/accounts/", response_model=Account, status_code=201, tags=["Financial Accounts"])
-def create_financial_account(client_id: int, account_data: Account):
-    try:
-        new_account: Account = helpers.AccountHelper.create(app.state.connection, account_data, client_id)
-        return new_account
-    except Exception as ex:
-        raise HTTPException(500, detail=str(ex))
-
 @app.get("/clients/{client_id}/accounts/", response_model=List[Account], tags=["Financial Accounts"])
-def get_all_financial_accounts_for_client(client_id: int):
+def get_all_financial_accounts_for_client(client_id: int, conn=Depends(get_db)):
     try:
-        account: Account = helpers.AccountHelper.find_all(app.state.connection, client_id)
+        account: Account = helpers.AccountHelper.find_all(conn, client_id)
         return account
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.get("/clients/{client_id}/accounts/{account_id}", response_model=Account, tags=["Financial Accounts"])
-def get_financial_account(client_id: int, account_id: int):
+def get_financial_account(client_id: int, account_id: int, conn=Depends(get_db)):
     try:
-        account: Account = helpers.AccountHelper.find_first_by_id(app.state.connection, 
+        account: Account = helpers.AccountHelper.find_first_by_id(conn, 
                                                                          account_id, 
                                                                          client_id)
         return account
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
-@app.put("/clients/{client_id}/accounts/{account_id}", response_model=Account, tags=["Financial Accounts"])
-def update_financial_account(client_id: int, account_id: int, account_data: Account):
+@app.post("/clients/{client_id}/accounts/", response_model=Account, status_code=201, tags=["Financial Accounts"])
+def create_financial_account(client_id: int, account_data: Account, conn=Depends(get_db)):
     try:
-        new_account: Account = helpers.AccountHelper.update(app.state.connection, 
+        new_account: Account = helpers.AccountHelper.create(conn, account_data, client_id)
+        return new_account
+    except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
+
+@app.put("/clients/{client_id}/accounts/{account_id}", response_model=Account, tags=["Financial Accounts"])
+def update_financial_account(client_id: int, account_id: int, account_data: Account, conn=Depends(get_db)):
+    try:
+        new_account: Account = helpers.AccountHelper.update(conn, 
                                                                  account_id, 
                                                                  account_data, 
                                                                  client_id)
@@ -318,33 +334,33 @@ def update_financial_account(client_id: int, account_id: int, account_data: Acco
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/clients/{client_id}/accounts/{account_id}", status_code=204, tags=["Financial Accounts"])
-def delete_financial_account(client_id: int, account_id: int):
+def delete_financial_account(client_id: int, account_id: int, conn=Depends(get_db)):
     try:
-        helpers.CompanyUserHelper.delete(app.state.connection, account_id, client_id)
+        helpers.CompanyUserHelper.delete(conn, account_id, client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 # --- Transaction Status CRUD Endpoints ---
 @app.get("/transaction-status/", response_model=List[TransactionStatus], tags=["Transaction Status"])
-def get_transaction_status():
+def get_transaction_status(conn=Depends(get_db)):
     try:
-        transaction_status: TransactionStatus = helpers.TransactionStatusHelper.find_all(app.state.connection)
+        transaction_status: TransactionStatus = helpers.TransactionStatusHelper.find_all(conn)
         return transaction_status
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/transaction-status/", response_model=TransactionStatus, status_code=201, tags=["Transaction Status"])
-def create_transaction_status(transaction_status: TransactionStatus):
+def create_transaction_status(transaction_status: TransactionStatus, conn=Depends(get_db)):
     try:
-        new_transaction_status: TransactionStatus = helpers.TransactionStatusHelper.create(app.state.connection, transaction_status)
+        new_transaction_status: TransactionStatus = helpers.TransactionStatusHelper.create(conn, transaction_status)
         return new_transaction_status
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/transaction-status/{transaction_id}", response_model=TransactionStatus, tags=["Transaction Status"])
-def update_transaction_status(transaction_id: int, transaction_status_update: TransactionStatus):
+def update_transaction_status(transaction_id: int, transaction_status_update: TransactionStatus, conn=Depends(get_db)):
     try:
-        new_transaction_status: TransactionStatus = helpers.TransactionStatusHelper.update(app.state.connection, 
+        new_transaction_status: TransactionStatus = helpers.TransactionStatusHelper.update(conn, 
                                                                  transaction_id, 
                                                                  transaction_status_update)
         return new_transaction_status
@@ -352,33 +368,33 @@ def update_transaction_status(transaction_id: int, transaction_status_update: Tr
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/transaction-status/{transaction_id}", status_code=204, tags=["Transaction Status"])
-def delete_transaction_status(transaction_id: int):
+def delete_transaction_status(transaction_id: int, conn=Depends(get_db)):
     try:
-        helpers.TransactionStatusHelper.delete(app.state.connection, transaction_id)
+        helpers.TransactionStatusHelper.delete(conn, transaction_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 # --- Invoice CRUD Endpoints ---
 @app.get("/invoice/", response_model=List[Invoice], tags=["Invoice"])
-def get_invoice():
+def get_invoice(conn=Depends(get_db)):
     try:
-        invoice: Invoice = helpers.InvoiceHelper.find_all(app.state.connection)
+        invoice: Invoice = helpers.InvoiceHelper.find_all(conn)
         return invoice
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/invoice/", response_model=Invoice, status_code=201, tags=["Invoice"])
-def create_invoice(invoice: Invoice):
+def create_invoice(invoice: Invoice, conn=Depends(get_db)):
     try:
-        new_invoice: Invoice = helpers.InvoiceHelper.create(app.state.connection, invoice)
+        new_invoice: Invoice = helpers.InvoiceHelper.create(conn, invoice)
         return new_invoice
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/invoice/{invoice_id}", response_model=Invoice, tags=["Invoice"])
-def update_invoice(invoice_id: int, invoice_update: Invoice):
+def update_invoice(invoice_id: int, invoice_update: Invoice, conn=Depends(get_db)):
     try:
-        new_invoice: Invoice = helpers.InvoiceHelper.update(app.state.connection, 
+        new_invoice: Invoice = helpers.InvoiceHelper.update(conn, 
                                                                  invoice_id, 
                                                                  invoice_update)
         return new_invoice
@@ -386,33 +402,33 @@ def update_invoice(invoice_id: int, invoice_update: Invoice):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/invoice/{invoice_id}", status_code=204, tags=["Invoice"])
-def delete_invoice(invoice_id: int):
+def delete_invoice(invoice_id: int, conn=Depends(get_db)):
     try:
-        helpers.InvoiceHelper.delete(app.state.connection, invoice_id)
+        helpers.InvoiceHelper.delete(conn, invoice_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 # --- Partner CRUD Endpoints ---
 @app.get("/partner/", response_model=List[Partner], tags=["Partner"])
-def get_partner():
+def get_partner(conn=Depends(get_db)):
     try:
-        partner: Partner = helpers.PartnerHelper.find_all(app.state.connection)
+        partner: Partner = helpers.PartnerHelper.find_all(conn)
         return partner
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/partner/", status_code=201, tags=["Partner"])
-def create_partner(partner: Partner):
+def create_partner(partner: Partner, conn=Depends(get_db)):
     try:
-        helpers.PartnerHelper.create(app.state.connection, partner)
+        helpers.PartnerHelper.create(conn, partner)
         
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/partner/{partner_id}", response_model=Partner, tags=["Partner"])
-def update_partner(partner_id: int, partner_update: Partner):
+def update_partner(partner_id: int, partner_update: Partner, conn=Depends(get_db)):
     try:
-        new_partner: Partner = helpers.PartnerHelper.update(app.state.connection, 
+        new_partner: Partner = helpers.PartnerHelper.update(conn, 
                                                                  partner_id, 
                                                                  partner_update)
         return new_partner
@@ -420,33 +436,33 @@ def update_partner(partner_id: int, partner_update: Partner):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/partner/{partner_id}", status_code=204, tags=["Partner"])
-def delete_partner(partner_id: int):
+def delete_partner(partner_id: int, conn=Depends(get_db)):
     try:
-        helpers.PartnerHelper.delete(app.state.connection, partner_id)
+        helpers.PartnerHelper.delete(conn, partner_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 # --- Category CRUD Endpoints ---
-@app.get("/category/", response_model=List[Category], tags=["Category"])
-def get_category():
+@app.get("/category/", response_model=List[CategoryResponse], tags=["Category"])
+def get_category(conn=Depends(get_db)):
     try:
-        category: Category = helpers.CategoryHelper.find_all(app.state.connection)
+        category: CategoryResponse = helpers.CategoryHelper.find_all(conn)
         return category
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
-@app.post("/category/", response_model=Category, status_code=201, tags=["Category"])
-def create_category(category: Category):
+@app.post("/category/", response_model=CategoryResponse, status_code=201, tags=["Category"])
+def create_category(category: CategoryRequest, conn=Depends(get_db)):
     try:
-        new_category: Category = helpers.CategoryHelper.create(app.state.connection, category)
+        new_category: CategoryResponse = helpers.CategoryHelper.create(conn, category)
         return new_category
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
-@app.put("/category/{category_id}", response_model=Category, tags=["Category"])
-def update_category(category_id: int, category_update: Category):
+@app.put("/category/{category_id}", response_model=CategoryResponse, tags=["Category"])
+def update_category(category_id: int, category_update: CategoryRequest, conn=Depends(get_db)):
     try:
-        new_category: Category = helpers.CategoryHelper.update(app.state.connection, 
+        new_category: CategoryResponse = helpers.CategoryHelper.update(conn, 
                                                                  category_id, 
                                                                  category_update)
         return new_category
@@ -454,33 +470,33 @@ def update_category(category_id: int, category_update: Category):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/category/{category_id}", status_code=204, tags=["Category"])
-def delete_category(category_id: int):
+def delete_category(category_id: int, conn=Depends(get_db)):
     try:
-        helpers.CategoryHelper.delete(app.state.connection, category_id)
+        helpers.CategoryHelper.delete(conn, category_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 # --- Cost Center CRUD Endpoints ---
 @app.get("/cost-center/", response_model=List[CostCenter], tags=["Cost Center"])
-def get_cost_center():
+def get_cost_center(conn=Depends(get_db)):
     try:
-        cost_center: CostCenter = helpers.CostCenterHelper.find_all(app.state.connection)
+        cost_center: CostCenter = helpers.CostCenterHelper.find_all(conn)
         return cost_center
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/cost-center/", response_model=CostCenter, status_code=201, tags=["Cost Center"])
-def create_cost_center(cost_center: CostCenter):
+def create_cost_center(cost_center: CostCenter, conn=Depends(get_db)):
     try:
-        new_cost_center: CostCenter = helpers.CostCenterHelper.create(app.state.connection, cost_center)
+        new_cost_center: CostCenter = helpers.CostCenterHelper.create(conn, cost_center)
         return new_cost_center
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/cost-center/{cost_center_id}", response_model=CostCenter, tags=["Cost Center"])
-def update_cost_center(cost_center_id: int, cost_center_update: CostCenter):
+def update_cost_center(cost_center_id: int, cost_center_update: CostCenter, conn=Depends(get_db)):
     try:
-        new_cost_center: CostCenter = helpers.CostCenterHelper.update(app.state.connection, 
+        new_cost_center: CostCenter = helpers.CostCenterHelper.update(conn, 
                                                                  cost_center_id, 
                                                                  cost_center_update)
         return new_cost_center
@@ -488,49 +504,49 @@ def update_cost_center(cost_center_id: int, cost_center_update: CostCenter):
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/cost-center/{cost_center_id}", status_code=204, tags=["Cost Center"])
-def delete_cost_center(cost_center_id: int):
+def delete_cost_center(cost_center_id: int, conn=Depends(get_db)):
     try:
-        helpers.CostCenterHelper.delete(app.state.connection, cost_center_id)
+        helpers.CostCenterHelper.delete(conn, cost_center_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 
 # --- Transactions CRUD Endpoints ---
 @app.get("/transactions/", response_model=List[Transaction], tags=["Transactions"])
-def get_every_account_transaction():
+def get_every_account_transaction(conn=Depends(get_db)):
     try:
-        transaction_list: List[Transaction] = helpers.TransactionHelper.find_all(app.state.connection)
+        transaction_list: List[Transaction] = helpers.TransactionHelper.find_all(conn)
         return transaction_list
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 @app.get("/transactions/{account_id}", response_model=List[Transaction], tags=["Transactions"])
-def get_account_transactions_from_account(account_id: int):
+def get_account_transactions_from_account(account_id: int, conn=Depends(get_db)):
     try:
-        transaction_list: List[Transaction] = helpers.TransactionHelper.find_all_by_account(app.state.connection, account_id)
+        transaction_list: List[Transaction] = helpers.TransactionHelper.find_all_by_account(conn, account_id)
         return transaction_list
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
     
 @app.get("/transactions/{account_id}/{transaction_id}", response_model=List[Transaction], tags=["Transactions"])
-def get_account_transaction(account_id: int, transaction_id: int):
+def get_account_transaction(account_id: int, transaction_id: int, conn=Depends(get_db)):
     try:
-        transaction: Transaction = helpers.TransactionHelper.find_first_by_id(app.state.connection, transaction_id=transaction_id, account_id=account_id)
+        transaction: Transaction = helpers.TransactionHelper.find_first_by_id(conn, transaction_id=transaction_id, account_id=account_id)
         return transaction
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.post("/transactions/{account_id}", status_code=201, tags=["Transactions"])
-def create_account_transaction(transaction: Transaction, account_id: int):
+def create_account_transaction(transaction: Transaction, account_id: int, conn=Depends(get_db)):
     try:
-        helpers.TransactionHelper.create(app.state.connection, transaction, account_id)
+        helpers.TransactionHelper.create(conn, transaction, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
 @app.put("/transactions/{account_id}/{transaction_id}", response_model=Transaction, tags=["Transactions"])
-def update_account_transaction(transaction_id: int, account_id: int, transaction: Transaction):
+def update_account_transaction(transaction_id: int, account_id: int, transaction: Transaction, conn=Depends(get_db)):
     try:
-        new_transaction: Transaction = helpers.TransactionHelper.update(app.state.connection, 
+        new_transaction: Transaction = helpers.TransactionHelper.update(conn, 
                                                                           transaction_id,
                                                                           transaction,
                                                                           account_id)
@@ -539,8 +555,8 @@ def update_account_transaction(transaction_id: int, account_id: int, transaction
         raise HTTPException(500, detail=str(ex))
 
 @app.delete("/transactions/{account_id}/{transaction_id}", status_code=204, tags=["Transactions"])
-def delete_account_transaction(transaction_id: int, account_id: int):
+def delete_account_transaction(transaction_id: int, account_id: int, conn=Depends(get_db)):
     try:
-        helpers.TransactionHelper.delete(app.state.connection, transaction_id, account_id)
+        helpers.TransactionHelper.delete(conn, transaction_id, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))

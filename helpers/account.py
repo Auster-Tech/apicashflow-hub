@@ -12,8 +12,7 @@ class AccountHelper:
         query = Query(AccountHelper.table, connection, client_id = client_id, status = Status.ACTIVE.value)
         result = query.find()
 
-        if not result:
-            raise Exception("No result found.")
+        
 
         for client in result:
             client_list.append(Account.model_validate(client))
@@ -29,8 +28,7 @@ class AccountHelper:
         query = Query(AccountHelper.table, connection, **conditions)
         result = query.find(first=True)
 
-        if not result:
-            raise Exception("No result found.")
+        
 
         response: Account = Account.model_validate(result)
 

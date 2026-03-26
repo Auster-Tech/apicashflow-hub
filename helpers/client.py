@@ -16,10 +16,7 @@ class ClientHelper:
         client_list: List[ClientResponse] = []
         query = Query(ClientHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
-        
-        if not result:
-            raise Exception("No result found.")
-        
+
         for client in result:
             client_list.append(ClientResponse.model_validate(client))
 
@@ -32,10 +29,7 @@ class ClientHelper:
         conditions['status'] = Status.ACTIVE.value
         query = Query(ClientHelper.table, connection, **conditions)
         result = query.find(first=True)
-        
-        if not result:
-            raise Exception("No result found.")
-        
+
         response: ClientResponse = ClientResponse.model_validate(result)
 
         return response

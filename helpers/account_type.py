@@ -17,8 +17,7 @@ class AccountTypeHelper:
         query = Query(AccountTypeHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for account in result:
             account_list.append(AccountType.model_validate(account))
@@ -32,8 +31,7 @@ class AccountTypeHelper:
         query = Query(AccountTypeHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: AccountType = AccountType.model_validate(result)
 

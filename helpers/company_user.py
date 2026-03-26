@@ -17,8 +17,7 @@ class CompanyUserHelper:
         query = Query(CompanyUserHelper.table, connection, client_id = client_id, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for client in result:
             client_list.append(CompanyUser.model_validate(client))
@@ -34,8 +33,7 @@ class CompanyUserHelper:
         query = Query(CompanyUserHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: CompanyUser = CompanyUser.model_validate(result)
 

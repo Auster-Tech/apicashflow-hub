@@ -15,17 +15,21 @@ class Query:
             self._where_flag = True
     
     def find(self, first:bool = False):
+        result = []
         with self.connection.cursor() as cursor:
             sql = F"SELECT * FROM `{self.table}`"
             
             if self._where_flag:
                 sql += f" WHERE " +\
-                    " AND ".join([f"{key} = %({key})" for key in self._where.keys()])
+                    " AND ".join([f"{key} = %({key})s" for key in self._where.keys()])
+            print(sql)
             cursor.execute(sql, self._where)
             if first:
                 result = cursor.fetchone()
             else:
                 result = cursor.fetchall()
+        print("result")
+        print(result)
         return result
     
     def create(self):
@@ -41,6 +45,9 @@ class Query:
 
         with self.connection.cursor() as cursor:
             sql = f"INSERT INTO `{self.table}` (`{col_list_str}`) VALUES ({values_list_str})"
+            print("[DEBUG]")
+            print(sql)
+            print(client_data)
             cursor.execute(sql, client_data)
 
         self.connection.commit()

@@ -17,8 +17,7 @@ class AccountCurrencyHelper:
         query = Query(AccountCurrencyHelper.table, connection, status = Status.ACTIVE.value)
         result = query.find()
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         for account in result:
             account_list.append(AccountCurrency.model_validate(account))
@@ -32,8 +31,7 @@ class AccountCurrencyHelper:
         query = Query(AccountCurrencyHelper.table, connection, **conditions)
         result = query.find(first=True)
         
-        if not result:
-            raise Exception("No result found.")
+        
         
         response: AccountCurrency = AccountCurrency.model_validate(result)
 
