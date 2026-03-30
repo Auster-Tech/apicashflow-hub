@@ -72,7 +72,7 @@ class Query:
 
         self.connection.commit()
 
-    def delete(self, id: int):
+    def delete(self):
         if not self._where_flag:
             raise Exception("No data specified to be deleted")
 

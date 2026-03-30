@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, status, Path
 from typing import Any, List, Optional, Tuple, Dict, TypeVar
 from pydantic import BaseModel, EmailStr, Field, validator
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from models import *
 from pymysql.connections import Connection
@@ -57,7 +57,13 @@ class ClientHelper:
 
     @staticmethod
     def delete(connection: Connection, id:int):
-        query = Query(ClientHelper.table, connection, id=id)
+        client: ClientResponse = ClientHelper.find_first_by_field(connection, "id", id)
+        data = dict(
+            id=client.id,
+            tax_id=f"{client.tax_id}-DELETED-{datetime.now().strftime("Y-m-d-H-MS")}"
+            )
+
+        query = Query(ClientHelper.table, connection, **data)
         query.delete()
         return True
     

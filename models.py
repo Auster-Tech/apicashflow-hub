@@ -65,7 +65,7 @@ class CategoryType(str, Enum):
 
 class CategoryRequest(BaseModel):
     name: str; description: Optional[str] = None
-    type: CategoryType; status: Status
+    type: CategoryType; status: Status; client_id: int
 
 class CategoryResponse(CategoryRequest):
     id: int
