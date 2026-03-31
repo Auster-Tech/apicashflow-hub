@@ -50,7 +50,7 @@ class InvoiceHelper:
         query = Query(InvoiceHelper.table, connection, **invoice)
         query.create()
 
-        response: Invoice  = InvoiceHelper.find_first_by_field(connection, "invoice_number", invoice["name"])
+        response: Invoice  = InvoiceHelper.find_first_by_field(connection, "invoice_number", invoice["invoice_number"])
 
         return response
     

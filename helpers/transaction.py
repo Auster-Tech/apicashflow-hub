@@ -72,7 +72,7 @@ class TransactionHelper:
         query = Query(TransactionHelper.table, connection, **transaction)
         query.update()
 
-        updated_account: Transaction = TransactionHelper.find_first_by_field(connection, "id", id)
+        updated_account: Transaction = TransactionHelper.find_first_by_field(connection, "id", id, account_id)
         return updated_account
 
     @staticmethod

@@ -78,9 +78,9 @@ class Query:
 
         if 'id' not in self._where:
             raise Exception("Id must be specified in delete")
-        
-        self._where['status'] = Status.DELETED.value
-
-        self.update()
-        
-        self.connection.commit()    
+    
+        record_id = self._where['id']
+        with self.connection.cursor() as cursor:
+            sql = f"UPDATE `{self.table}` SET status = %s WHERE id = %s"
+            cursor.execute(sql, (Status.DELETED.value, record_id))
+        self.connection.commit()

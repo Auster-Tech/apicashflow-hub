@@ -58,9 +58,10 @@ class ClientHelper:
     @staticmethod
     def delete(connection: Connection, id:int):
         client: ClientResponse = ClientHelper.find_first_by_field(connection, "id", id)
+        now = datetime.now().strftime("Y-m-d-H-MS")
         data = dict(
             id=client.id,
-            tax_id=f"{client.tax_id}-DELETED-{datetime.now().strftime("Y-m-d-H-MS")}"
+            tax_id=f"{client.tax_id}-DELETED-{now}"
             )
 
         query = Query(ClientHelper.table, connection, **data)
