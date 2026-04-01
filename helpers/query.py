@@ -41,12 +41,15 @@ class Query:
         
         values_list = [f"%({column})s" for column in columns]
         values_list_str = ", ".join(values_list)
+        last_row_id = None
 
         with self.connection.cursor() as cursor:
             sql = f"INSERT INTO `{self.table}` (`{col_list_str}`) VALUES ({values_list_str})"
             cursor.execute(sql, client_data)
+            last_row_id = cursor.lastrowid
 
         self.connection.commit()
+        return last_row_id
 
     def update(self):
         if not self._where_flag:
