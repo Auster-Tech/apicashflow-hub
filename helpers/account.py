@@ -25,12 +25,13 @@ class AccountHelper:
         return AccountHelper.find_first_by_field(connection, "id", account_id, client_id)
 
     @staticmethod
-    def create(connection: Connection, data: AccountRequest, client_id: int) -> bool:
+    def create(connection: Connection, data: AccountRequest, client_id: int) -> AccountResponse:
         payload = data.model_dump()
         payload['status'] = payload['status'].value
         payload['client_id'] = client_id
-        Query(AccountHelper.table, connection, **payload).create()
-        return True
+        id = Query(AccountHelper.table, connection, **payload).create()
+        account = AccountHelper.find_first_by_id(connection, id, client_id)
+        return account
 
     @staticmethod
     def update(connection: Connection, id: int, data: AccountRequest, client_id: int) -> AccountResponse:
