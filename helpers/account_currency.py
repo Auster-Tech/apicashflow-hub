@@ -1,72 +1,42 @@
-from fastapi import FastAPI, HTTPException, status, Path
-from typing import Any, List, Optional, Tuple, Dict, TypeVar
-from pydantic import BaseModel, EmailStr, Field, validator
-from decimal import Decimal
-from datetime import date
-from enum import Enum
-from models import *
+from typing import Any, List
+from models import AccountCurrencyRequest, AccountCurrencyResponse, Status
 from pymysql.connections import Connection
 from .query import Query
 
+
 class AccountCurrencyHelper:
     table = 'AccountCurrency'
-    
-    @staticmethod
-    def find_all(connection: Connection):
-        account_list: List[AccountCurrency] = []
-        query = Query(AccountCurrencyHelper.table, connection, status = Status.ACTIVE.value)
-        result = query.find()
-        
-        
-        
-        for account in result:
-            account_list.append(AccountCurrency.model_validate(account))
-
-        return account_list 
 
     @staticmethod
-    def find_first_by_field(connection: Connection, field_name:str, field_value:Any):
-        conditions = dict()
-        conditions[field_name] = field_value
-        query = Query(AccountCurrencyHelper.table, connection, **conditions)
-        result = query.find(first=True)
-        
-        
-        
-        response: AccountCurrency = AccountCurrency.model_validate(result)
-
-        return response
+    def find_all(connection: Connection) -> List[AccountCurrencyResponse]:
+        result = Query(AccountCurrencyHelper.table, connection, status=Status.ACTIVE.value).find()
+        return [AccountCurrencyResponse.model_validate(row) for row in result]
 
     @staticmethod
-    def find_first_by_id(connection: Connection, account_id: int):
-        response: AccountCurrency = AccountCurrencyHelper.find_first_by_field(connection, "id", account_id)
-
-        return response
-        
-    @staticmethod
-    def create(connection: Connection, account_data: AccountCurrency):
-        account = account_data.model_dump()
-        account['status'] = account['status'].value
-        query = Query(AccountCurrencyHelper.table, connection, **account)
-        query.create()
-
-        response: AccountCurrency  = AccountCurrencyHelper.find_first_by_field(connection, "code", account["code"])
-
-        return response
-    
-    @staticmethod
-    def update(connection: Connection, id:int, account_data: AccountCurrency):
-        account = account_data.model_dump()
-        account['status'] = account['status'].value
-        account['id'] = id
-        query = Query(AccountCurrencyHelper.table, connection, **account)
-        query.update()
-
-        updated_account: AccountCurrency = AccountCurrencyHelper.find_first_by_field(connection, "id", id)
-        return updated_account
+    def find_first_by_field(connection: Connection, field_name: str, field_value: Any) -> AccountCurrencyResponse:
+        result = Query(AccountCurrencyHelper.table, connection, **{field_name: field_value}).find(first=True)
+        return AccountCurrencyResponse.model_validate(result)
 
     @staticmethod
-    def delete(connection: Connection, id:int):
-        query = Query(AccountCurrencyHelper.table, connection, id=id)
-        query.delete()
+    def find_first_by_id(connection: Connection, account_currency_id: int) -> AccountCurrencyResponse:
+        return AccountCurrencyHelper.find_first_by_field(connection, "id", account_currency_id)
+
+    @staticmethod
+    def create(connection: Connection, data: AccountCurrencyRequest) -> AccountCurrencyResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        Query(AccountCurrencyHelper.table, connection, **payload).create()
+        return AccountCurrencyHelper.find_first_by_field(connection, "code", payload["code"])
+
+    @staticmethod
+    def update(connection: Connection, id: int, data: AccountCurrencyRequest) -> AccountCurrencyResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        payload['id'] = id
+        Query(AccountCurrencyHelper.table, connection, **payload).update()
+        return AccountCurrencyHelper.find_first_by_field(connection, "id", id)
+
+    @staticmethod
+    def delete(connection: Connection, id: int) -> bool:
+        Query(AccountCurrencyHelper.table, connection, id=id).delete()
         return True

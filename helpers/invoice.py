@@ -1,72 +1,47 @@
-from fastapi import FastAPI, HTTPException, status, Path
-from typing import Any, List, Optional, Tuple, Dict, TypeVar
-from pydantic import BaseModel, EmailStr, Field, validator
-from decimal import Decimal
-from datetime import date
-from enum import Enum
-from models import *
+from typing import Any, List
+from models import InvoiceRequest, InvoiceResponse, Status
 from pymysql.connections import Connection
 from .query import Query
 
+
 class InvoiceHelper:
     table = 'Invoice'
-    
-    @staticmethod
-    def find_all(connection: Connection):
-        invoice_list: List[Invoice] = []
-        query = Query(InvoiceHelper.table, connection, status = Status.ACTIVE.value)
-        result = query.find()
-        
-        
-        
-        for invoice in result:
-            invoice_list.append(Invoice.model_validate(invoice))
-
-        return invoice_list 
 
     @staticmethod
-    def find_first_by_field(connection: Connection, field_name:str, field_value:Any):
-        conditions = dict()
-        conditions[field_name] = field_value
-        query = Query(InvoiceHelper.table, connection, **conditions)
-        result = query.find(first=True)
-        
-        
-        
-        response: Invoice = Invoice.model_validate(result)
-
-        return response
+    def find_all(connection: Connection) -> List[InvoiceResponse]:
+        result = Query(InvoiceHelper.table, connection, status=Status.ACTIVE.value).find()
+        return [InvoiceResponse.model_validate(row) for row in result]
 
     @staticmethod
-    def find_first_by_id(connection: Connection, invoice_id: int):
-        response: Invoice = InvoiceHelper.find_first_by_field(connection, "id", invoice_id)
-
-        return response
-        
-    @staticmethod
-    def create(connection: Connection, invoice_data: Invoice):
-        invoice = invoice_data.model_dump()
-        invoice['status'] = invoice['status'].value
-        query = Query(InvoiceHelper.table, connection, **invoice)
-        query.create()
-
-        response: Invoice  = InvoiceHelper.find_first_by_field(connection, "invoice_number", invoice["invoice_number"])
-
-        return response
-    
-    @staticmethod
-    def update(connection: Connection, id:int, invoice_data: Invoice):
-        invoice = invoice_data.model_dump()
-        invoice['status'] = invoice['status'].value
-        invoice['id'] = id
-        query = Query(InvoiceHelper.table, connection, **invoice)
-        query.update()
-
-        updated_invoice: Invoice = InvoiceHelper.find_first_by_field(connection, "id", id)
-        return updated_invoice
+    def find_first_by_field(connection: Connection, field_name: str, field_value: Any) -> InvoiceResponse:
+        result = Query(InvoiceHelper.table, connection, **{field_name: field_value}).find(first=True)
+        return InvoiceResponse.model_validate(result)
 
     @staticmethod
-    def delete(connection: Connection, id:int):
-        query = Query(InvoiceHelper.table, connection, id=id)
-        query.delete()
+    def find_first_by_id(connection: Connection, invoice_id: int) -> InvoiceResponse:
+        return InvoiceHelper.find_first_by_field(connection, "id", invoice_id)
+
+    @staticmethod
+    def create(connection: Connection, data: InvoiceRequest) -> InvoiceResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        # Convert date objects to strings for MySQL
+        payload['issue_date'] = str(payload['issue_date'])
+        payload['due_date'] = str(payload['due_date'])
+        Query(InvoiceHelper.table, connection, **payload).create()
+        return InvoiceHelper.find_first_by_field(connection, "invoice_number", payload["invoice_number"])
+
+    @staticmethod
+    def update(connection: Connection, id: int, data: InvoiceRequest) -> InvoiceResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        payload['issue_date'] = str(payload['issue_date'])
+        payload['due_date'] = str(payload['due_date'])
+        payload['id'] = id
+        Query(InvoiceHelper.table, connection, **payload).update()
+        return InvoiceHelper.find_first_by_field(connection, "id", id)
+
+    @staticmethod
+    def delete(connection: Connection, id: int) -> bool:
+        Query(InvoiceHelper.table, connection, id=id).delete()
         return True

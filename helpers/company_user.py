@@ -1,76 +1,47 @@
-from fastapi import FastAPI, HTTPException, status, Path
-from typing import Any, List, Optional, Tuple, Dict, TypeVar
-from pydantic import BaseModel, EmailStr, Field, validator
-from decimal import Decimal
-from datetime import date
-from enum import Enum
-from models import *
+from typing import Any, List
+from models import CompanyUserRequest, CompanyUserResponse, Status
 from pymysql.connections import Connection
 from .query import Query
 
+
 class CompanyUserHelper:
     table = 'ClientUsers'
-    
-    @staticmethod
-    def find_all(connection: Connection, client_id: int):
-        client_list: List[CompanyUser] = []
-        query = Query(CompanyUserHelper.table, connection, client_id = client_id, status = Status.ACTIVE.value)
-        result = query.find()
-        
-        
-        
-        for client in result:
-            client_list.append(CompanyUser.model_validate(client))
-
-        return client_list 
 
     @staticmethod
-    def find_first_by_field(connection: Connection, field_name:str, field_value:Any, client_id: int):
-        conditions = dict()
-        conditions[field_name] = field_value
-        conditions['client_id'] = client_id
-        conditions['status'] = Status.ACTIVE.value
-        query = Query(CompanyUserHelper.table, connection, **conditions)
-        result = query.find(first=True)
-        
-        
-        
-        response: CompanyUser = CompanyUser.model_validate(result)
-
-        return response
+    def find_all(connection: Connection, client_id: int) -> List[CompanyUserResponse]:
+        result = Query(CompanyUserHelper.table, connection, client_id=client_id, status=Status.ACTIVE.value).find()
+        return [CompanyUserResponse.model_validate(row) for row in result]
 
     @staticmethod
-    def find_first_by_id(connection: Connection, user_id: int, client_id: int):
-        response: CompanyUser = CompanyUserHelper.find_first_by_field(connection, "id", user_id, client_id)
-
-        return response
-        
-    @staticmethod
-    def create(connection: Connection, client_data: CompanyUserRequest, client_id: int):
-        client = client_data.model_dump()
-        client['status'] = client['status'].value
-        client['client_id'] = client_id
-        query = Query(CompanyUserHelper.table, connection, **client)
-        query.create()
-
-        response: CompanyUser = CompanyUserHelper.find_first_by_field(connection, "email", client["email"], client_id)
-        
-        return response
-    
-    @staticmethod
-    def update(connection: Connection, id:int, client_data: CompanyUserRequest, client_id: int):
-        client = client_data.model_dump()
-        client['status'] = client['status'].value
-        client['id'] = id
-        client['client_id'] = client_id
-        query = Query(CompanyUserHelper.table, connection, **client)
-        query.update()
-
-        updated_client: CompanyUser = CompanyUserHelper.find_first_by_field(connection, "id", id)
-        return updated_client
+    def find_first_by_field(connection: Connection, field_name: str, field_value: Any, client_id: int) -> CompanyUserResponse:
+        result = Query(
+            CompanyUserHelper.table, connection,
+            **{field_name: field_value, 'client_id': client_id, 'status': Status.ACTIVE.value}
+        ).find(first=True)
+        return CompanyUserResponse.model_validate(result)
 
     @staticmethod
-    def delete(connection: Connection, id:int, client_id: int):
-        query = Query(CompanyUserHelper.table, connection, id=id, client_id=client_id)
-        query.delete()
+    def find_first_by_id(connection: Connection, user_id: int, client_id: int) -> CompanyUserResponse:
+        return CompanyUserHelper.find_first_by_field(connection, "id", user_id, client_id)
+
+    @staticmethod
+    def create(connection: Connection, data: CompanyUserRequest, client_id: int) -> CompanyUserResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        payload['client_id'] = client_id
+        Query(CompanyUserHelper.table, connection, **payload).create()
+        return CompanyUserHelper.find_first_by_field(connection, "email", payload["email"], client_id)
+
+    @staticmethod
+    def update(connection: Connection, id: int, data: CompanyUserRequest, client_id: int) -> CompanyUserResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        payload['id'] = id
+        payload['client_id'] = client_id
+        Query(CompanyUserHelper.table, connection, **payload).update()
+        return CompanyUserHelper.find_first_by_field(connection, "id", id, client_id)
+
+    @staticmethod
+    def delete(connection: Connection, id: int, client_id: int) -> bool:
+        Query(CompanyUserHelper.table, connection, id=id, client_id=client_id).delete()
         return True

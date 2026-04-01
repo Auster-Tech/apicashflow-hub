@@ -1,70 +1,44 @@
-from fastapi import FastAPI, HTTPException, status, Path
-from typing import Any, List, Optional, Tuple, Dict, TypeVar
-from pydantic import BaseModel, EmailStr, Field, validator
-from decimal import Decimal
-from datetime import date
-from enum import Enum
-from models import *
+from typing import Any, List
+from models import CategoryRequest, CategoryResponse, Status
 from pymysql.connections import Connection
 from .query import Query
 
+
 class CategoryHelper:
     table = 'Category'
-    
-    @staticmethod
-    def find_all(connection: Connection):
-        category_list: List[CategoryResponse] = []
-        query = Query(CategoryHelper.table, connection, status = Status.ACTIVE.value)
-        result = query.find()
-                
-        for category in result:
-            category_list.append(CategoryResponse.model_validate(category))
-
-        return category_list 
 
     @staticmethod
-    def find_first_by_field(connection: Connection, field_name:str, field_value:Any):
-        conditions = dict()
-        conditions[field_name] = field_value
-        query = Query(CategoryHelper.table, connection, **conditions)
-        result = query.find(first=True)
-        
-        response: CategoryResponse = CategoryResponse.model_validate(result)
-
-        return response
+    def find_all(connection: Connection) -> List[CategoryResponse]:
+        result = Query(CategoryHelper.table, connection, status=Status.ACTIVE.value).find()
+        return [CategoryResponse.model_validate(row) for row in result]
 
     @staticmethod
-    def find_first_by_id(connection: Connection, category_id: int):
-        response: CategoryResponse = CategoryHelper.find_first_by_field(connection, "id", category_id)
-
-        return response
-        
-    @staticmethod
-    def create(connection: Connection, category_data: CategoryRequest):
-        category = category_data.model_dump()
-        category['status'] = category['status'].value
-        category['type'] = category['type'].value
-        query = Query(CategoryHelper.table, connection, **category)
-        query.create()
-
-        response: CategoryResponse  = CategoryHelper.find_first_by_field(connection, "name", category["name"])
-
-        return response
-    
-    @staticmethod
-    def update(connection: Connection, id:int, category_data: CategoryRequest):
-        category = category_data.model_dump()
-        category['status'] = category['status'].value
-        category['type'] = category['type'].value
-        category['id'] = id
-        query = Query(CategoryHelper.table, connection, **category)
-        query.update()
-
-        updated_category: CategoryResponse = CategoryHelper.find_first_by_field(connection, "id", id)
-        return updated_category
+    def find_first_by_field(connection: Connection, field_name: str, field_value: Any) -> CategoryResponse:
+        result = Query(CategoryHelper.table, connection, **{field_name: field_value}).find(first=True)
+        return CategoryResponse.model_validate(result)
 
     @staticmethod
-    def delete(connection: Connection, id:int):
-        query = Query(CategoryHelper.table, connection, id=id)
-        query.delete()
+    def find_first_by_id(connection: Connection, category_id: int) -> CategoryResponse:
+        return CategoryHelper.find_first_by_field(connection, "id", category_id)
+
+    @staticmethod
+    def create(connection: Connection, data: CategoryRequest) -> CategoryResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        payload['type'] = payload['type'].value
+        Query(CategoryHelper.table, connection, **payload).create()
+        return CategoryHelper.find_first_by_field(connection, "name", payload["name"])
+
+    @staticmethod
+    def update(connection: Connection, id: int, data: CategoryRequest) -> CategoryResponse:
+        payload = data.model_dump()
+        payload['status'] = payload['status'].value
+        payload['type'] = payload['type'].value
+        payload['id'] = id
+        Query(CategoryHelper.table, connection, **payload).update()
+        return CategoryHelper.find_first_by_field(connection, "id", id)
+
+    @staticmethod
+    def delete(connection: Connection, id: int) -> bool:
+        Query(CategoryHelper.table, connection, id=id).delete()
         return True
