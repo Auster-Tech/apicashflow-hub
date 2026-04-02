@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from models import PartnerRequest, PartnerResponse, Status
 from pymysql.connections import Connection
 from .query import Query
@@ -8,8 +8,11 @@ class PartnerHelper:
     table = 'Partner'
 
     @staticmethod
-    def find_all(connection: Connection) -> List[PartnerResponse]:
-        result = Query(PartnerHelper.table, connection, status=Status.ACTIVE.value).find()
+    def find_all(connection: Connection, client_id: Optional[int] = None) -> List[PartnerResponse]:
+        filters = {'status': Status.ACTIVE.value}
+        if client_id is not None:
+            filters['client_id'] = client_id
+        result = Query(PartnerHelper.table, connection, **filters).find()
         return [PartnerResponse.model_validate(row) for row in result]
 
     @staticmethod

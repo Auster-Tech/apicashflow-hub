@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from models import InvoiceRequest, InvoiceResponse, Status
 from pymysql.connections import Connection
 from .query import Query
@@ -8,8 +8,11 @@ class InvoiceHelper:
     table = 'Invoice'
 
     @staticmethod
-    def find_all(connection: Connection) -> List[InvoiceResponse]:
-        result = Query(InvoiceHelper.table, connection, status=Status.ACTIVE.value).find()
+    def find_all(connection: Connection, client_id: Optional[int] = None) -> List[InvoiceResponse]:
+        filters = {'status': Status.ACTIVE.value}
+        if client_id is not None:
+            filters['client_id'] = client_id
+        result = Query(InvoiceHelper.table, connection, **filters).find()
         return [InvoiceResponse.model_validate(row) for row in result]
 
     @staticmethod
@@ -25,7 +28,6 @@ class InvoiceHelper:
     def create(connection: Connection, data: InvoiceRequest) -> InvoiceResponse:
         payload = data.model_dump()
         payload['status'] = payload['status'].value
-        # Convert date objects to strings for MySQL
         payload['issue_date'] = str(payload['issue_date'])
         payload['due_date'] = str(payload['due_date'])
         Query(InvoiceHelper.table, connection, **payload).create()

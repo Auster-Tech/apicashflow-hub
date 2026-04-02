@@ -22,18 +22,16 @@
 
 from contextlib import asynccontextmanager
 import logging
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query as QueryParam
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Optional
 from models import (
-    # Requests
     ClientRequest, CompanyUserRequest,
     AccountTypeRequest, AccountCurrencyRequest,
     AccountRequest, AccountBalanceRequest,
     CategoryRequest, TransactionStatusRequest,
     PartnerRequest, CostCenterRequest,
     InvoiceRequest, TransactionRequest,
-    # Responses
     ClientResponse, CompanyUserResponse,
     AccountTypeResponse, AccountCurrencyResponse,
     AccountResponse, AccountBalanceResponse,
@@ -365,9 +363,12 @@ def delete_financial_account(client_id: int, account_id: int, conn=Depends(get_d
 # ---------------------------------------------------------------------------
 
 @app.get("/transaction-status/", response_model=List[TransactionStatusResponse], tags=["Transaction Status"])
-def get_transaction_status(conn=Depends(get_db)):
+def get_transaction_status(
+    client_id: Optional[int] = QueryParam(None),
+    conn=Depends(get_db),
+):
     try:
-        return helpers.TransactionStatusHelper.find_all(conn)
+        return helpers.TransactionStatusHelper.find_all(conn, client_id=client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
@@ -401,9 +402,12 @@ def delete_transaction_status(transaction_id: int, conn=Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.get("/invoice/", response_model=List[InvoiceResponse], tags=["Invoice"])
-def get_invoice(conn=Depends(get_db)):
+def get_invoice(
+    client_id: Optional[int] = QueryParam(None),
+    conn=Depends(get_db),
+):
     try:
-        return helpers.InvoiceHelper.find_all(conn)
+        return helpers.InvoiceHelper.find_all(conn, client_id=client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
@@ -437,9 +441,12 @@ def delete_invoice(invoice_id: int, conn=Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.get("/partner/", response_model=List[PartnerResponse], tags=["Partner"])
-def get_partner(conn=Depends(get_db)):
+def get_partner(
+    client_id: Optional[int] = QueryParam(None),
+    conn=Depends(get_db),
+):
     try:
-        return helpers.PartnerHelper.find_all(conn)
+        return helpers.PartnerHelper.find_all(conn, client_id=client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
@@ -473,9 +480,12 @@ def delete_partner(partner_id: int, conn=Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.get("/category/", response_model=List[CategoryResponse], tags=["Category"])
-def get_category(conn=Depends(get_db)):
+def get_category(
+    client_id: Optional[int] = QueryParam(None),
+    conn=Depends(get_db),
+):
     try:
-        return helpers.CategoryHelper.find_all(conn)
+        return helpers.CategoryHelper.find_all(conn, client_id=client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
@@ -509,9 +519,12 @@ def delete_category(category_id: int, conn=Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.get("/cost-center/", response_model=List[CostCenterResponse], tags=["Cost Center"])
-def get_cost_center(conn=Depends(get_db)):
+def get_cost_center(
+    client_id: Optional[int] = QueryParam(None),
+    conn=Depends(get_db),
+):
     try:
-        return helpers.CostCenterHelper.find_all(conn)
+        return helpers.CostCenterHelper.find_all(conn, client_id=client_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
