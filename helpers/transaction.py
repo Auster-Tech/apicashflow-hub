@@ -14,8 +14,7 @@ class TransactionHelper:
     table = 'Transaction'
 
     # ------------------------------------------------------------------
-    # Private helpers — fetch a single related row by id, return None if
-    # the id is null or the row doesn't exist.
+    # Private helpers
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -25,7 +24,7 @@ class TransactionHelper:
             return None
         try:
             result = Query(table, connection, id=row_id).find(first=True)
-            return result  # already a dict thanks to DictCursor
+            return result
         except Exception:
             return None
 
@@ -35,48 +34,21 @@ class TransactionHelper:
         Take a raw Transaction dict from the DB and return an
         EnrichedTransactionResponse with all related objects resolved.
         """
-        # Resolve each FK —————————————————————————————————————————————
-        account_row = TransactionHelper._fetch_one(
-            connection, 'Account', row.get('account_id'))
+        account_row      = TransactionHelper._fetch_one(connection, 'Account',           row.get('account_id'))
+        category_row     = TransactionHelper._fetch_one(connection, 'Category',          row.get('category_id'))
+        status_row       = TransactionHelper._fetch_one(connection, 'TransactionStatus', row.get('transaction_status_id'))
+        cost_center_row  = TransactionHelper._fetch_one(connection, 'CostCenter',        row.get('cost_center_id'))
+        partner_row      = TransactionHelper._fetch_one(connection, 'Partner',           row.get('partner_id'))
+        invoice_row      = TransactionHelper._fetch_one(connection, 'Invoice',           row.get('invoice_id'))
 
-        category_row = TransactionHelper._fetch_one(
-            connection, 'Category', row.get('category_id'))
-
-        status_row = TransactionHelper._fetch_one(
-            connection, 'TransactionStatus', row.get('transaction_status_id'))
-
-        cost_center_row = TransactionHelper._fetch_one(
-            connection, 'CostCenter', row.get('cost_center_id'))
-
-        partner_row = TransactionHelper._fetch_one(
-            connection, 'Partner', row.get('partner_id'))
-
-        invoice_row = TransactionHelper._fetch_one(
-            connection, 'Invoice', row.get('invoice_id'))
-
-        # Build nested models (coerce dates to str for JSON safety) ———
-        account_info = EnrichedAccountInfo(**account_row) if account_row else None
-
-        category_info = None
-        if category_row:
-            # CategoryType is stored as a plain string in the DB
-            category_info = EnrichedCategoryInfo(**category_row)
-
-        status_info = (
-            EnrichedStatusInfo(**status_row) if status_row else None
-        )
-
-        cost_center_info = (
-            EnrichedCostCenterInfo(**cost_center_row) if cost_center_row else None
-        )
-
-        partner_info = (
-            EnrichedPartnerInfo(**partner_row) if partner_row else None
-        )
+        account_info     = EnrichedAccountInfo(**account_row)        if account_row     else None
+        category_info    = EnrichedCategoryInfo(**category_row)      if category_row    else None
+        status_info      = EnrichedStatusInfo(**status_row)          if status_row      else None
+        cost_center_info = EnrichedCostCenterInfo(**cost_center_row) if cost_center_row else None
+        partner_info     = EnrichedPartnerInfo(**partner_row)        if partner_row     else None
 
         invoice_info = None
         if invoice_row:
-            # Coerce date objects to ISO strings so Pydantic is happy
             inv = dict(invoice_row)
             if inv.get('issue_date') is not None:
                 inv['issue_date'] = str(inv['issue_date'])
@@ -84,7 +56,6 @@ class TransactionHelper:
                 inv['due_date'] = str(inv['due_date'])
             invoice_info = EnrichedInvoiceInfo(**inv)
 
-        # Coerce transaction_date ——————————————————————————————————————
         transaction_date = row.get('transaction_date')
         if transaction_date is not None:
             transaction_date = str(transaction_date)
@@ -110,13 +81,12 @@ class TransactionHelper:
         )
 
     # ------------------------------------------------------------------
-    # Public GET methods — now return enriched responses
+    # Public GET methods
     # ------------------------------------------------------------------
 
     @staticmethod
     def find_all(connection: Connection) -> List[EnrichedTransactionResponse]:
-        rows = Query(TransactionHelper.table, connection,
-                     status=Status.ACTIVE.value).find()
+        rows = Query(TransactionHelper.table, connection, status=Status.ACTIVE.value).find()
         return [TransactionHelper._enrich(connection, row) for row in rows]
 
     @staticmethod
@@ -128,6 +98,29 @@ class TransactionHelper:
             status=Status.ACTIVE.value,
             account_id=account_id,
         ).find()
+        return [TransactionHelper._enrich(connection, row) for row in rows]
+
+    @staticmethod
+    def find_all_by_client(
+        connection: Connection, client_id: int
+    ) -> List[EnrichedTransactionResponse]:
+        """
+        Return every active transaction whose linked Account belongs to
+        the given client.  Uses a JOIN because Transaction has no direct
+        client_id column — the relationship is Transaction → Account → Client.
+        """
+        sql = """
+            SELECT t.*
+            FROM `Transaction` t
+            INNER JOIN `Account` a ON a.id = t.account_id
+            WHERE a.client_id = %(client_id)s
+              AND t.status    = %(status)s
+            ORDER BY t.transaction_date DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, {'client_id': client_id, 'status': Status.ACTIVE.value})
+            rows = cursor.fetchall()
+
         return [TransactionHelper._enrich(connection, row) for row in rows]
 
     @staticmethod
@@ -153,7 +146,7 @@ class TransactionHelper:
             connection, "id", transaction_id, account_id)
 
     # ------------------------------------------------------------------
-    # Write methods — unchanged (work with TransactionRequest)
+    # Write methods — unchanged
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -180,13 +173,11 @@ class TransactionHelper:
         payload['account_id'] = account_id
         payload['transaction_date'] = str(payload['transaction_date'])
         Query(TransactionHelper.table, connection, **payload).update()
-        return TransactionHelper.find_first_by_field(
-            connection, "id", id, account_id)
+        return TransactionHelper.find_first_by_field(connection, "id", id, account_id)
 
     @staticmethod
     def delete(
         connection: Connection, id: int, account_id: int
     ) -> bool:
-        Query(TransactionHelper.table, connection,
-              id=id, account_id=account_id).delete()
+        Query(TransactionHelper.table, connection, id=id, account_id=account_id).delete()
         return True

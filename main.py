@@ -1,49 +1,3 @@
-# main.py  (only the Transactions section is changed — the rest is identical)
-# Replace the three GET /transactions endpoints with the snippet below.
-# ─────────────────────────────────────────────────────────────────────────────
-# CHANGED IMPORTS: add EnrichedTransactionResponse
-# ─────────────────────────────────────────────────────────────────────────────
-
-# At the top of main.py, add EnrichedTransactionResponse to the models import:
-#
-# from models import (
-#     ...
-#     TransactionRequest, TransactionResponse,
-#     EnrichedTransactionResponse,          # ← NEW
-#     ...
-# )
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Replace the three existing GET /transactions routes with these:
-# ─────────────────────────────────────────────────────────────────────────────
-
-# @app.get("/transactions/", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
-# def get_every_account_transaction(conn=Depends(get_db)):
-#     try:
-#         return helpers.TransactionHelper.find_all(conn)
-#     except Exception as ex:
-#         raise HTTPException(500, detail=str(ex))
-#
-#
-# @app.get("/transactions/{account_id}", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
-# def get_account_transactions_from_account(account_id: int, conn=Depends(get_db)):
-#     try:
-#         return helpers.TransactionHelper.find_all_by_account(conn, account_id)
-#     except Exception as ex:
-#         raise HTTPException(500, detail=str(ex))
-#
-#
-# @app.get("/transactions/{account_id}/{transaction_id}", response_model=EnrichedTransactionResponse, tags=["Transactions"])
-# def get_account_transaction(account_id: int, transaction_id: int, conn=Depends(get_db)):
-#     try:
-#         return helpers.TransactionHelper.find_first_by_id(conn, transaction_id=transaction_id, account_id=account_id)
-#     except Exception as ex:
-#         raise HTTPException(500, detail=str(ex))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Full updated main.py (complete file for copy-paste):
-# ─────────────────────────────────────────────────────────────────────────────
-
 # 6. Run the development server:
 #    uvicorn main:app --reload
 #
@@ -67,7 +21,7 @@ from models import (
     CategoryResponse, TransactionStatusResponse,
     PartnerResponse, CostCenterResponse,
     InvoiceResponse, TransactionResponse,
-    EnrichedTransactionResponse,          # ← NEW
+    EnrichedTransactionResponse,
 )
 import helpers
 import pymysql
@@ -217,6 +171,24 @@ def delete_client_user(client_id: int, user_id: int, conn=Depends(get_db)):
     try:
         helpers.CompanyUserHelper.delete(conn, user_id, client_id)
     except Exception as ex:
+        raise HTTPException(500, detail=str(ex))
+
+
+# ---------------------------------------------------------------------------
+# Client Transactions  ← NEW
+# ---------------------------------------------------------------------------
+
+@app.get(
+    "/clients/{client_id}/transactions/",
+    response_model=List[EnrichedTransactionResponse],
+    tags=["Transactions"],
+    summary="Get all transactions for a client (across all their accounts)",
+)
+def get_client_transactions(client_id: int, conn=Depends(get_db)):
+    try:
+        return helpers.TransactionHelper.find_all_by_client(conn, client_id)
+    except Exception as ex:
+        logger.error(ex)
         raise HTTPException(500, detail=str(ex))
 
 
@@ -585,8 +557,6 @@ def delete_cost_center(cost_center_id: int, conn=Depends(get_db)):
 
 # ---------------------------------------------------------------------------
 # Transactions
-# ── GET endpoints now return EnrichedTransactionResponse (all related
-#    objects embedded). POST / PUT / DELETE are unchanged.
 # ---------------------------------------------------------------------------
 
 @app.get("/transactions/", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
