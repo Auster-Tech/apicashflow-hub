@@ -183,22 +183,107 @@ class TransactionResponse(TransactionRequest):
     id: int
 
 
+# --- EnrichedTransactionResponse ---
+# Used by GET endpoints to return a transaction merged with all related objects.
+
+class EnrichedAccountInfo(BaseModel):
+    id: int
+    name: str
+    institution: Optional[str] = None
+    account_type_id: Optional[int] = None
+    account_currency_id: Optional[int] = None
+    client_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EnrichedCategoryInfo(BaseModel):
+    id: int
+    name: str
+    type: Optional[str] = None
+    description: Optional[str] = None
+    client_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EnrichedStatusInfo(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    client_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EnrichedCostCenterInfo(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    client_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EnrichedPartnerInfo(BaseModel):
+    id: int
+    name: str
+    contact_info: Optional[str] = None
+    client_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EnrichedInvoiceInfo(BaseModel):
+    id: int
+    invoice_number: str
+    issue_date: Optional[str] = None
+    due_date: Optional[str] = None
+    amount: Optional[Decimal] = None
+    client_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class EnrichedTransactionResponse(BaseModel):
+    # Core transaction fields
+    id: int
+    transaction_date: Optional[str] = None
+    description: Optional[str] = None
+    amount: Optional[Decimal] = None
+    status: Optional[int] = None
+
+    # FK IDs kept for reference
+    category_id: Optional[int] = None
+    account_id: Optional[int] = None
+    transaction_status_id: Optional[int] = None
+    partner_id: Optional[int] = None
+    cost_center_id: Optional[int] = None
+    invoice_id: Optional[int] = None
+
+    # Nested related objects (None when FK is null or record not found)
+    account: Optional[EnrichedAccountInfo] = None
+    category: Optional[EnrichedCategoryInfo] = None
+    transaction_status: Optional[EnrichedStatusInfo] = None
+    cost_center: Optional[EnrichedCostCenterInfo] = None
+    partner: Optional[EnrichedPartnerInfo] = None
+    invoice: Optional[EnrichedInvoiceInfo] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ---------------------------------------------------------------------------
 # Backward-compatibility aliases
-# These keep the old names working so helpers and main.py can be migrated
-# incrementally without breaking anything.
 # ---------------------------------------------------------------------------
 
-# CompanyUser kept as-is (already had Request/Response split)
-CompanyUser = CompanyUserResponse
-
-# Flat model aliases (old code used a single class for everything)
-AccountType     = AccountTypeResponse
-AccountCurrency = AccountCurrencyResponse
-Account         = AccountResponse
-AccountBalance  = AccountBalanceResponse
+CompanyUser       = CompanyUserResponse
+AccountType       = AccountTypeResponse
+AccountCurrency   = AccountCurrencyResponse
+Account           = AccountResponse
+AccountBalance    = AccountBalanceResponse
 TransactionStatus = TransactionStatusResponse
-Partner         = PartnerResponse
-CostCenter      = CostCenterResponse
-Invoice         = InvoiceResponse
-Transaction     = TransactionResponse
+Partner           = PartnerResponse
+CostCenter        = CostCenterResponse
+Invoice           = InvoiceResponse
+Transaction       = TransactionResponse

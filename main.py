@@ -1,20 +1,49 @@
-# main.py
+# main.py  (only the Transactions section is changed — the rest is identical)
+# Replace the three GET /transactions endpoints with the snippet below.
+# ─────────────────────────────────────────────────────────────────────────────
+# CHANGED IMPORTS: add EnrichedTransactionResponse
+# ─────────────────────────────────────────────────────────────────────────────
+
+# At the top of main.py, add EnrichedTransactionResponse to the models import:
 #
-# --- Project Setup ---
-# 1. Save this code as 'main.py'.
-# 2. Create a file named 'requirements.txt' in the same directory with the following content:
-#    fastapi
-#    uvicorn[standard]
-#    pydantic[email]
+# from models import (
+#     ...
+#     TransactionRequest, TransactionResponse,
+#     EnrichedTransactionResponse,          # ← NEW
+#     ...
+# )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Replace the three existing GET /transactions routes with these:
+# ─────────────────────────────────────────────────────────────────────────────
+
+# @app.get("/transactions/", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
+# def get_every_account_transaction(conn=Depends(get_db)):
+#     try:
+#         return helpers.TransactionHelper.find_all(conn)
+#     except Exception as ex:
+#         raise HTTPException(500, detail=str(ex))
 #
-# 3. Open your terminal or command prompt in that directory.
-# 4. Create a virtual environment (recommended):
-#    python -m venv venv
-#    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 #
-# 5. Install the required libraries:
-#    pip install -r requirements.txt
+# @app.get("/transactions/{account_id}", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
+# def get_account_transactions_from_account(account_id: int, conn=Depends(get_db)):
+#     try:
+#         return helpers.TransactionHelper.find_all_by_account(conn, account_id)
+#     except Exception as ex:
+#         raise HTTPException(500, detail=str(ex))
 #
+#
+# @app.get("/transactions/{account_id}/{transaction_id}", response_model=EnrichedTransactionResponse, tags=["Transactions"])
+# def get_account_transaction(account_id: int, transaction_id: int, conn=Depends(get_db)):
+#     try:
+#         return helpers.TransactionHelper.find_first_by_id(conn, transaction_id=transaction_id, account_id=account_id)
+#     except Exception as ex:
+#         raise HTTPException(500, detail=str(ex))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Full updated main.py (complete file for copy-paste):
+# ─────────────────────────────────────────────────────────────────────────────
+
 # 6. Run the development server:
 #    uvicorn main:app --reload
 #
@@ -38,6 +67,7 @@ from models import (
     CategoryResponse, TransactionStatusResponse,
     PartnerResponse, CostCenterResponse,
     InvoiceResponse, TransactionResponse,
+    EnrichedTransactionResponse,          # ← NEW
 )
 import helpers
 import pymysql
@@ -555,9 +585,11 @@ def delete_cost_center(cost_center_id: int, conn=Depends(get_db)):
 
 # ---------------------------------------------------------------------------
 # Transactions
+# ── GET endpoints now return EnrichedTransactionResponse (all related
+#    objects embedded). POST / PUT / DELETE are unchanged.
 # ---------------------------------------------------------------------------
 
-@app.get("/transactions/", response_model=List[TransactionResponse], tags=["Transactions"])
+@app.get("/transactions/", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
 def get_every_account_transaction(conn=Depends(get_db)):
     try:
         return helpers.TransactionHelper.find_all(conn)
@@ -565,7 +597,7 @@ def get_every_account_transaction(conn=Depends(get_db)):
         raise HTTPException(500, detail=str(ex))
 
 
-@app.get("/transactions/{account_id}", response_model=List[TransactionResponse], tags=["Transactions"])
+@app.get("/transactions/{account_id}", response_model=List[EnrichedTransactionResponse], tags=["Transactions"])
 def get_account_transactions_from_account(account_id: int, conn=Depends(get_db)):
     try:
         return helpers.TransactionHelper.find_all_by_account(conn, account_id)
@@ -573,10 +605,11 @@ def get_account_transactions_from_account(account_id: int, conn=Depends(get_db))
         raise HTTPException(500, detail=str(ex))
 
 
-@app.get("/transactions/{account_id}/{transaction_id}", response_model=TransactionResponse, tags=["Transactions"])
+@app.get("/transactions/{account_id}/{transaction_id}", response_model=EnrichedTransactionResponse, tags=["Transactions"])
 def get_account_transaction(account_id: int, transaction_id: int, conn=Depends(get_db)):
     try:
-        return helpers.TransactionHelper.find_first_by_id(conn, transaction_id=transaction_id, account_id=account_id)
+        return helpers.TransactionHelper.find_first_by_id(
+            conn, transaction_id=transaction_id, account_id=account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
 
@@ -589,7 +622,7 @@ def create_account_transaction(transaction: TransactionRequest, account_id: int,
         raise HTTPException(500, detail=str(ex))
 
 
-@app.put("/transactions/{account_id}/{transaction_id}", response_model=TransactionResponse, tags=["Transactions"])
+@app.put("/transactions/{account_id}/{transaction_id}", response_model=EnrichedTransactionResponse, tags=["Transactions"])
 def update_account_transaction(transaction_id: int, account_id: int, transaction: TransactionRequest, conn=Depends(get_db)):
     try:
         return helpers.TransactionHelper.update(conn, transaction_id, transaction, account_id)
