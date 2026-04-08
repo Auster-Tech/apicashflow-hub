@@ -606,3 +606,62 @@ def delete_account_transaction(transaction_id: int, account_id: int, conn=Depend
         helpers.TransactionHelper.delete(conn, transaction_id, account_id)
     except Exception as ex:
         raise HTTPException(500, detail=str(ex))
+
+@app.get("/cashflow/", tags=["Cashflow"])
+def get_cashflow(
+    period: str = QueryParam("yearly"),          # monthly | quarterly | yearly
+    client_id: Optional[int] = QueryParam(None),
+    conn=Depends(get_db),
+):
+    """
+    Returns an aggregated cashflow summary for the given period.
+ 
+    Query parameters
+    ----------------
+    period    : "monthly" | "quarterly" | "yearly"  (default: "yearly")
+    client_id : filter by a specific client (optional for accountants)
+ 
+    Response structure
+    ------------------
+    {
+      "period": "yearly",
+      "start_date": "2026-01-01",
+      "end_date":   "2026-12-31",
+      "totals": {
+        "total_inflow":  12345.67,
+        "total_outflow":  9876.54,
+        "net_cash_flow":  2469.13
+      },
+      "monthly_breakdown": [
+        { "month": "2026-01", "inflow": 1000, "outflow": 800, "net_flow": 200 },
+        ...
+      ],
+      "trend": [
+        { "date": "2026-01-05", "cumulative_balance": 200.0 },
+        ...
+      ],
+      "category_breakdown": [
+        { "category_id": 3, "name": "Salário", "type": "income", "amount": 5000 },
+        ...
+      ],
+      "account_breakdown": [
+        { "account_id": 1, "name": "Conta Corrente", "balance": 1500.0 },
+        ...
+      ]
+    }
+    """
+    if period not in ("monthly", "quarterly", "yearly"):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid period. Must be one of: monthly, quarterly, yearly",
+        )
+    try:
+        return helpers.CashflowHelper.get_summary(
+            conn,
+            period=period,
+            client_id=client_id,
+        )
+    except Exception as ex:
+        logger.error(ex)
+        raise HTTPException(500, detail=str(ex))

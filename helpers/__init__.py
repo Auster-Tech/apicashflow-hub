@@ -10,3 +10,4 @@ from .partner import PartnerHelper
 from .account import AccountHelper
 from .account_balance import AccountBalanceHelper
 from .transaction import TransactionHelper
+from .cashflow import CashflowHelper
