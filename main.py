@@ -4,6 +4,7 @@
 # 7. Open your browser and go to http://127.0.0.1:8000/docs to see the interactive API documentation.
 
 from contextlib import asynccontextmanager
+from datetime import date
 import logging
 from fastapi import Depends, FastAPI, HTTPException, Query as QueryParam
 from fastapi.middleware.cors import CORSMiddleware
@@ -177,21 +178,43 @@ def delete_client_user(client_id: int, user_id: int, conn=Depends(get_db)):
 # ---------------------------------------------------------------------------
 # Client Transactions  ← NEW
 # ---------------------------------------------------------------------------
-
 @app.get(
     "/clients/{client_id}/transactions/",
     response_model=List[EnrichedTransactionResponse],
     tags=["Transactions"],
     summary="Get all transactions for a client (across all their accounts)",
 )
-def get_client_transactions(client_id: int, conn=Depends(get_db)):
+def get_client_transactions(
+    client_id: int,
+    start_date: Optional[date] = QueryParam(None, description="Filter from this date (YYYY-MM-DD). Optional."),
+    end_date:   Optional[date] = QueryParam(None, description="Filter up to this date (YYYY-MM-DD). Optional."),
+    conn=Depends(get_db),
+):
+    """
+    Return all transactions for a client's accounts, optionally filtered by
+    date range.  When no dates are supplied the full history is returned.
+ 
+    Examples
+    --------
+    All transactions:
+        GET /clients/1/transactions/
+ 
+    Current year (sent by the frontend by default):
+        GET /clients/1/transactions/?start_date=2026-01-01&end_date=2026-12-31
+ 
+    Single month:
+        GET /clients/1/transactions/?start_date=2026-03-01&end_date=2026-03-31
+    """
     try:
-        return helpers.TransactionHelper.find_all_by_client(conn, client_id)
+        return helpers.TransactionHelper.find_all_by_client(
+            conn,
+            client_id=client_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
     except Exception as ex:
         logger.error(ex)
-        raise HTTPException(500, detail=str(ex))
-
-
+        raise HTTPException(status_code=500, detail=str(ex))
 # ---------------------------------------------------------------------------
 # Account Types
 # ---------------------------------------------------------------------------
