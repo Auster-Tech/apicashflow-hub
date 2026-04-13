@@ -396,3 +396,54 @@ ALTER TABLE altyex.CostCenter ADD CONSTRAINT CostCenter_Client_FK FOREIGN KEY (c
 ALTER TABLE altyex.Partner ADD CONSTRAINT Partner_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
 ALTER TABLE altyex.Invoice ADD CONSTRAINT Invoice_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
 ALTER TABLE altyex.TransactionStatus ADD CONSTRAINT TransactionStatus_Client_FK FOREIGN KEY (client_id) REFERENCES altyex.Client(id);
+
+-- =============================================================================
+-- MIGRATION: Authentication
+-- Database : altyex
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- 1. Accountant
+--    Contadores que acessam a plataforma como administradores.
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE `Accountant` (
+  `id`            int          NOT NULL AUTO_INCREMENT,
+  `name`          varchar(100) NOT NULL,
+  `email`         varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `dt_created`    timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `status`        int          NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `Accountant_email_UNIQUE` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- -----------------------------------------------------------------------------
+-- 2. Adicionar password_hash em ClientUsers
+--    Usuários de empresas clientes também precisam de senha para login.
+-- -----------------------------------------------------------------------------
+
+ALTER TABLE `altyex`.`ClientUsers`
+  ADD COLUMN `password_hash` varchar(255) NULL AFTER `is_admin`;
+
+
+-- -----------------------------------------------------------------------------
+-- 3. RefreshToken
+--    Armazena refresh tokens ativos para permitir renovação de sessão e
+--    revogação explícita (logout, troca de senha, suspeita de comprometimento).
+--    user_type distingue entre 'accountant' e 'client_user'.
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE `RefreshToken` (
+  `id`          int          NOT NULL AUTO_INCREMENT,
+  `token`       varchar(512) NOT NULL,
+  `user_id`     int          NOT NULL,
+  `user_type`   enum('accountant','client_user') NOT NULL,
+  `expires_at`  datetime     NOT NULL,
+  `revoked`     tinyint(1)   NOT NULL DEFAULT '0',
+  `dt_created`  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `RefreshToken_token_UNIQUE` (`token`),
+  KEY `RefreshToken_user_idx` (`user_id`, `user_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
