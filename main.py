@@ -24,7 +24,7 @@ from models import (
     InvoiceResponse, TransactionResponse,
     EnrichedTransactionResponse,
 )
-from auth import auth_router, get_current_user, require_accountant, require_same_client
+from auth import auth_router, get_auth_db, get_current_user, require_accountant, require_same_client
 from auth.models import TokenPayload
 import helpers
 import pymysql
@@ -61,23 +61,6 @@ def get_db():
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# Dependência de banco injetada no router de auth
-# ---------------------------------------------------------------------------
-# O router de auth foi criado com Depends(lambda: None) como placeholder.
-# Aqui sobrescrevemos essa dependência com o get_db real da aplicação.
-
-auth_router.dependency_overrides = get_db
-
-
-def _get_db_for_auth():
-    conn = app.state.pool.connection()
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -97,9 +80,13 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Registrar o router de autenticação
+# Registrar o router de autenticacao e injetar o pool de banco correto
 # ---------------------------------------------------------------------------
-app.include_router(auth_router, dependencies=[Depends(get_db)])
+# get_auth_db e a sentinela declarada no pacote auth. Aqui substituimos ela
+# pela funcao get_db real que acessa o pool criado no lifespan.
+app.dependency_overrides[get_auth_db] = get_db
+
+app.include_router(auth_router)
 
 
 # --- Root ---
@@ -254,7 +241,7 @@ def delete_client_user(
 
 
 # ---------------------------------------------------------------------------
-# Client Transactions  ← NEW
+# Client Transactions  <- NEW
 # ---------------------------------------------------------------------------
 @app.get(
     "/clients/{client_id}/transactions/",
