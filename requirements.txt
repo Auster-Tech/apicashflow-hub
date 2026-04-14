@@ -1,7 +1,10 @@
-   fastapi
-   uvicorn[standard]
-   pydantic[email]
-   pymysql
-   python-dotenv
-   cryptography
-   dbutils
+fastapi
+uvicorn[standard]
+pydantic[email]
+pymysql
+python-dotenv
+cryptography
+dbutils
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1 # essa é a única versão que funciona com o passlib
